@@ -14,13 +14,12 @@ Prototipo web responsive en español para buscar paseadores, registrar perritos 
 
 No se muestran precios, reseñas, calificaciones ni verificaciones inventadas. Supabase protege las cuentas y sus contraseñas. Los datos de mascotas, solicitudes y el perfil editable de Max todavía se guardan en el almacenamiento local por usuario/navegador; aún no se sincronizan con la base de datos ni con otros dispositivos.
 
-## Conectar Supabase Auth
+## Supabase Auth
 
-1. Crea un proyecto en Supabase.
-2. En **Project Settings → API**, copia el **Project URL** y la llave **anon/publicable** en `supabase-config.js`.
-3. En **SQL Editor**, ejecuta el contenido de `supabase-schema.sql`. La tabla `profiles` tiene RLS; cada registro nuevo obtiene rol `customer`. Los usuarios no pueden asignarse el rol `walker` ni `admin` desde el navegador.
-4. Crea cuentas con los correos de Max y Martín desde el formulario de clientes y confirma los correos si Supabase lo solicita.
-5. Desde el SQL Editor de Supabase, asigna los roles especiales a sus correos registrados:
+Supabase Auth ya está conectado en `supabase-config.js`, el esquema de `supabase-schema.sql` ya se ejecutó en el proyecto, y la URL de Vercel está permitida como retorno después de confirmar el correo.
+
+1. Max y Martín deben crear sus cuentas desde **Entrar → Crear cuenta cliente** con los correos que usarán. Confirmen esos correos si Supabase lo solicita.
+2. Después de crear las cuentas, desde el SQL Editor de Supabase asigna el rol adecuado por correo:
 
    ```sql
    update public.profiles p
@@ -34,9 +33,9 @@ No se muestran precios, reseñas, calificaciones ni verificaciones inventadas. S
    where p.id = u.id and lower(u.email) = lower('CORREO_DE_MARTIN');
    ```
 
-6. Publica los cambios para que Vercel los despliegue. Los correos de clientes deben confirmar la dirección según la configuración de autenticación de Supabase.
+3. Max inicia sesión con su cuenta de paseador; Martín inicia sesión con su cuenta de administrador. Los roles no se pueden cambiar desde el navegador.
 
-La llave `anon`/publicable está diseñada para exponerse en el navegador; la seguridad depende de las políticas RLS incluidas en el esquema. **Nunca** pongas en `supabase-config.js` una llave `service_role`/secreta. La URL y la llave publicable aún no están configuradas, así que registro e inicio de sesión permanecerán deshabilitados hasta conectar un proyecto.
+La llave `anon`/publicable está diseñada para exponerse en el navegador; la seguridad depende de las políticas RLS incluidas en el esquema. **Nunca** pongas en `supabase-config.js` una llave `service_role`/secreta.
 
 ## Pagos y comisión
 
@@ -48,8 +47,8 @@ Antes de habilitar cobros hay que decidir el país y moneda de operación, tarif
 
 ## Para convertirlo en producto
 
-1. Añadir autenticación y roles (familia, paseador y administración).
-2. Crear una API y base de datos para usuarios, mascotas, documentos de verificación, disponibilidad, reservas, calificaciones y pagos.
+1. Mover los datos de mascotas, perfiles, disponibilidad y reservas de `localStorage` a tablas con políticas RLS.
+2. Crear almacenamiento seguro para documentos de verificación y fotos de mascotas.
 3. Implementar revisión administrativa antes de publicar perfiles y un flujo de reseñas ligado a paseos completados.
 4. Integrar pagos divididos con el proveedor elegido, webhooks firmados y conciliación de transferencias.
 5. Añadir controles de acceso, protección de datos, consentimiento para ubicación/fotos, políticas de privacidad y términos locales.

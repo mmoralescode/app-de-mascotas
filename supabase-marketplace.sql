@@ -22,6 +22,7 @@ grant update (display_name, area, bio, price_mxn, photo_path, sizes, preferences
   on public.walker_profiles to authenticated;
 
 drop policy if exists "Anyone can view walker listings" on public.walker_profiles;
+drop policy if exists "Authenticated users can view walker listings" on public.walker_profiles;
 create policy "Authenticated users can view walker listings"
   on public.walker_profiles for select
   to authenticated
@@ -249,6 +250,7 @@ on conflict (id) do update set
   allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Public can view walker photos" on storage.objects;
+drop policy if exists "Authenticated users can view walker photos" on storage.objects;
 create policy "Authenticated users can view walker photos"
   on storage.objects for select
   to authenticated

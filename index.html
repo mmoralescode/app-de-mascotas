@@ -64,6 +64,7 @@
     .walker-card { overflow: hidden; background: var(--paper); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 7px 25px #24372c08; }
     .walker-photo { position: relative; height: 184px; overflow: hidden; background: var(--mint); }
     .walker-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .walker-placeholder { width: 100%; height: 100%; display: grid; place-items: center; color: var(--green); font-size: 46px; font-weight: 850; letter-spacing: -2px; background: radial-gradient(circle at 50% 40%, #fff 0 23%, transparent 24%), linear-gradient(135deg, #eaf3e9, #dcebdd); }
     .badge { position: absolute; left: 12px; top: 12px; border-radius: 99px; padding: 7px 10px; background: #fff; color: var(--green-dark); font-size: 11px; font-weight: 800; box-shadow: 0 2px 8px #00000012; }
     .online-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; background: #47a36d; border-radius: 50%; }
     .walker-body { padding: 16px; }
@@ -167,7 +168,7 @@
       <nav class="nav" aria-label="Navegación principal">
         <button class="button button-quiet button-small" id="myDogsButton">Mis perritos</button>
         <button class="button button-quiet button-small" id="myBookingsButton">Mis paseos</button>
-        <button class="button button-primary button-small" id="walkerModeButton">Soy paseador</button>
+        <button class="button button-primary button-small" id="walkerModeButton">Perfiles</button>
       </nav>
     </div>
   </header>
@@ -178,7 +179,7 @@
         <div class="hero-copy">
           <div class="eyebrow">Más movimiento, más colitas felices</div>
           <h1 id="hero-title">Su próximo paseo empieza con alguien de confianza.</h1>
-          <p>Conoce paseadores verificados, descubre quién conecta con tu perrito y agenda en minutos.</p>
+          <p>Conoce a las personas que cuidarán a tu perrito y prepara su próximo paseo.</p>
         </div>
         <img class="hero-dog" src="https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&amp;fit=crop&amp;w=650&amp;q=85" alt="Golden retriever listo para salir a pasear">
       </div>
@@ -201,15 +202,15 @@
 
     <section aria-labelledby="walkers-title">
       <div class="section-head">
-        <div><h2 id="walkers-title">Paseadores para ti</h2><p id="resultsLabel">Personas verificadas, paseos hechos a su medida.</p></div>
+        <div><h2 id="walkers-title">Paseadores</h2><p id="resultsLabel">Conoce el perfil de Maximiliano.</p></div>
         <button class="button button-quiet button-small" id="clearFiltersButton" hidden>Limpiar filtros</button>
       </div>
       <div class="listings" id="walkerList" aria-live="polite"></div>
     </section>
 
     <section class="trust-row" aria-label="Beneficios">
-      <div class="trust-item"><div class="trust-icon" aria-hidden="true">✓</div><div><strong>Perfiles verificados</strong><small>Revisamos cada perfil antes de publicarlo.</small></div></div>
-      <div class="trust-item"><div class="trust-icon" aria-hidden="true">☆</div><div><strong>Opiniones reales</strong><small>Calificaciones de familias después del paseo.</small></div></div>
+      <div class="trust-item"><div class="trust-icon" aria-hidden="true">✓</div><div><strong>Perfiles en preparación</strong><small>Agregaremos los detalles antes de abrir reservas.</small></div></div>
+      <div class="trust-item"><div class="trust-icon" aria-hidden="true">☆</div><div><strong>Calificaciones más adelante</strong><small>Las reseñas se agregarán después de los paseos.</small></div></div>
       <div class="trust-item"><div class="trust-icon" aria-hidden="true">♡</div><div><strong>Un paseo a su estilo</strong><small>Cuéntanos qué hace feliz a tu perrito.</small></div></div>
     </section>
   </main>
@@ -231,18 +232,12 @@
     <div class="dialog-content" id="bookingsContent"></div>
   </dialog>
 
-  <dialog id="walkerDialog" aria-labelledby="walkerTitleDialog">
-    <div class="dialog-head"><h2 id="walkerTitleDialog">Disponibilidad de paseador</h2><button class="icon-button" data-close="walkerDialog" aria-label="Cerrar">×</button></div>
-    <div class="dialog-content" id="walkerContent"></div>
+  <dialog id="profilesDialog" aria-labelledby="profilesTitle">
+    <div class="dialog-head"><h2 id="profilesTitle">Perfiles</h2><button class="icon-button" data-close="profilesDialog" aria-label="Cerrar">×</button></div>
+    <div class="dialog-content" id="profilesContent"></div>
   </dialog>
 
   <script>
-    const walkers = [
-      { id: "sofia", name: "Sofía Ramírez", area: "Roma Norte · a 1.2 km", rating: 4.98, reviews: 86, price: 180, photo: "photo-1534528741775-53994a69daeb", status: "Disponible hoy", bio: "Paseos tranquilos, juegos y mucha atención a su ritmo.", tags: ["Verificada", "Tiene perritos", "Caminata", "Correa siempre"], sizes: ["Pequeño", "Mediano"], availability: ["09:00", "10:00", "12:00", "16:00"] },
-      { id: "diego", name: "Diego Fernández", area: "Condesa · a 2.4 km", rating: 4.95, reviews: 62, price: 220, photo: "photo-1500648767791-00dcc994a43e", status: "Disponible hoy", bio: "Aventuras activas para perros que disfrutan explorar.", tags: ["Verificado", "Practica bici", "Tiene perritos", "Caminata"], sizes: ["Mediano", "Grande"], availability: ["08:00", "11:00", "15:00", "17:00"] },
-      { id: "valeria", name: "Valeria Cruz", area: "Del Valle · a 3 km", rating: 4.91, reviews: 41, price: 160, photo: "photo-1531123897727-8f129e1688ce", status: "Agenda abierta", bio: "Experiencia con cachorros y perros sensibles o tímidos.", tags: ["Verificada", "Caminata", "Refuerzo positivo"], sizes: ["Pequeño", "Mediano", "Grande"], availability: ["09:00", "13:00", "14:00", "18:00"] }
-    ];
-
     const store = {
       read(key, fallback) {
         try {
@@ -263,6 +258,21 @@
       }
     };
 
+    const defaultMaxProfile = {
+      id: "max",
+      name: "Maximiliano Morales Alcántara",
+      area: "",
+      bio: "",
+      price: "",
+      photo: "",
+      sizes: [],
+      tags: [],
+      availability: [],
+      available: false
+    };
+    const maxProfile = { ...defaultMaxProfile, ...store.read("pasea-max-profile", {}) };
+    const developerProfile = store.read("pasea-developer-profile", { name: "", role: "Desarrollador" });
+    const walkers = [maxProfile];
     let dogs = store.read("pasea-dogs", []);
     let bookings = store.read("pasea-bookings", []);
     let filters = { location: "", date: "", size: "" };
@@ -283,7 +293,7 @@
         return areaMatch && sizeMatch;
       });
       $("#clearFiltersButton").hidden = !location && !filters.size && !filters.date;
-      $("#resultsLabel").textContent = `${found.length} ${found.length === 1 ? "paseador disponible" : "paseadores disponibles"} · Personas verificadas, paseos hechos a su medida.`;
+      $("#resultsLabel").textContent = found.length ? "Un perfil de paseador, con información en preparación." : "No encontramos perfiles para esa búsqueda.";
       const list = $("#walkerList");
       list.replaceChildren();
       if (!found.length) {
@@ -298,27 +308,28 @@
         card.className = "walker-card";
         const photo = document.createElement("div");
         photo.className = "walker-photo";
-        const image = document.createElement("img");
-        image.src = `https://images.unsplash.com/${walker.photo}?auto=format&fit=crop&w=700&q=80`;
-        image.alt = `Foto de ${walker.name}`;
-        image.loading = "lazy";
-        const badge = document.createElement("span");
-        badge.className = "badge";
-        badge.innerHTML = `<span class="online-dot"></span>${walker.status}`;
-        photo.append(image, badge);
+        if (walker.photo) {
+          const image = document.createElement("img");
+          image.src = walker.photo;
+          image.alt = `Foto de ${walker.name}`;
+          photo.append(image);
+        } else {
+          const placeholder = document.createElement("div");
+          placeholder.className = "walker-placeholder";
+          placeholder.textContent = "MM";
+          placeholder.setAttribute("aria-label", "Foto de perfil pendiente");
+          photo.append(placeholder);
+        }
         const body = document.createElement("div");
         body.className = "walker-body";
         const heading = document.createElement("div");
         heading.className = "walker-title";
         const name = document.createElement("h3");
         name.textContent = walker.name;
-        const rating = document.createElement("div");
-        rating.className = "rating";
-        rating.innerHTML = `★ ${walker.rating} <span>(${walker.reviews})</span>`;
-        heading.append(name, rating);
+        heading.append(name);
         const meta = document.createElement("p");
         meta.className = "walker-meta";
-        meta.textContent = `${walker.area} · ${walker.bio}`;
+        meta.textContent = [walker.area, walker.bio].filter(Boolean).join(" · ") || "Perfil en preparación.";
         const tags = document.createElement("div");
         tags.className = "tags";
         walker.tags.forEach(tag => {
@@ -329,14 +340,17 @@
         });
         const bottom = document.createElement("div");
         bottom.className = "walker-bottom";
-        const price = document.createElement("div");
-        price.className = "price";
-        price.innerHTML = `${money(walker.price)} <small>/ paseo</small>`;
         const button = document.createElement("button");
-        button.className = "button button-primary button-small";
-        button.textContent = "Ver horarios";
-        button.addEventListener("click", () => openBooking(walker.id));
-        bottom.append(price, button);
+        button.className = "button button-soft button-small";
+        button.textContent = "Próximamente";
+        button.disabled = true;
+        if (walker.price && walker.availability.length && walker.available) {
+          button.className = "button button-primary button-small";
+          button.textContent = "Ver horarios";
+          button.disabled = false;
+          button.addEventListener("click", () => openBooking(walker.id));
+        }
+        bottom.append(button);
         body.append(heading, meta, tags, bottom);
         card.append(photo, body);
         list.append(card);
@@ -350,11 +364,11 @@
         openDogs();
         return;
       }
-      const times = currentWalker.availability.map(time => `<option value="${time}">${time}</option>`).join("");
+      const times = currentWalker.availability.map(time => `<option value="${escapeHtml(time)}">${escapeHtml(time)}</option>`).join("");
       const dogOptions = dogs.map((dog, index) => `<option value="${index}">${escapeHtml(dog.name)} · ${escapeHtml(dog.size)} · ${escapeHtml(dog.breed)}</option>`).join("");
       const dateValue = filters.date || $("#searchDate").value || localDate;
       $("#bookingContent").innerHTML = `
-        <p class="hint">Reserva con <strong>${escapeHtml(currentWalker.name)}</strong> · ${escapeHtml(currentWalker.area)}</p>
+        <p class="hint">Reserva con <strong>${escapeHtml(currentWalker.name)}</strong>${currentWalker.area ? ` · ${escapeHtml(currentWalker.area)}` : ""}</p>
         <form id="bookingForm">
           <div class="form-grid">
             <div class="form-field"><label for="bookingDog">Perrito</label><select id="bookingDog" required>${dogOptions}</select></div>
@@ -363,13 +377,7 @@
             <div class="form-field"><label for="bookingPhone">Teléfono de contacto</label><input id="bookingPhone" type="tel" placeholder="55 1234 5678" autocomplete="tel" required></div>
             <div class="form-field full"><label for="bookingAddress">Dirección para recoger al perrito</label><input id="bookingAddress" placeholder="Calle, número, colonia y referencias" autocomplete="street-address" required></div>
           </div>
-          <div class="price-breakdown">
-            <div class="price-line"><span>Paseo de 60 minutos</span><strong>${money(currentWalker.price)}</strong></div>
-            <div class="price-line"><span>Comisión de la plataforma (20%)</span><span>${money(currentWalker.price * .2)}</span></div>
-            <div class="price-line"><span>El paseador recibe (80%)</span><span>${money(currentWalker.price * .8)}</span></div>
-            <div class="price-line total"><span>Total a pagar</span><span>${money(currentWalker.price)}</span></div>
-          </div>
-          <div class="notice">Demostración: no se realizará ningún cobro. La comisión ilustrativa del 20% se podrá ajustar antes de lanzar los pagos reales.</div>
+          <div class="notice">El pago todavía no está habilitado. Al completar la configuración se mostrarán los precios y horarios definitivos.</div>
           <div class="form-actions"><button type="button" class="button button-quiet" data-close="bookingDialog">Cancelar</button><button class="button button-primary" type="submit">Confirmar reserva</button></div>
         </form>`;
       $("#bookingDialog").showModal();
@@ -470,39 +478,81 @@
     }
 
     function renderWalkerMode() {
-      const saved = store.read("pasea-walker-settings", { available: true, weekdays: ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"], start: "09:00", end: "17:00" });
-      const weekdays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-      $("#walkerContent").innerHTML = `<p class="hint">Configura tus horarios y disponibilidad. En esta versión, los cambios se guardan solo en este navegador.</p>
-        <form id="walkerSettingsForm">
-          <div class="toggle-row"><label for="walkerAvailable">Estoy disponible para nuevos paseos</label><input id="walkerAvailable" type="checkbox" ${saved.available ? "checked" : ""}></div>
-          <div class="form-grid" style="margin-top:15px">
-            <div class="form-field"><label for="walkerStart">Disponible desde</label><input id="walkerStart" type="time" value="${escapeHtml(saved.start)}" required></div>
-            <div class="form-field"><label for="walkerEnd">Disponible hasta</label><input id="walkerEnd" type="time" value="${escapeHtml(saved.end)}" required></div>
-          </div>
-          <p style="font-size:13px;font-weight:750;margin:20px 0 5px">Días disponibles</p>
-          ${weekdays.map(day => `<div class="toggle-row"><label for="day-${day}">${day}</label><input id="day-${day}" name="weekdays" type="checkbox" value="${day}" ${saved.weekdays.includes(day) ? "checked" : ""}></div>`).join("")}
-          <div class="form-actions"><button class="button button-primary" type="submit">Guardar horarios</button></div>
-        </form>
-        <div class="notice">Para publicar tu perfil, la plataforma deberá revisar y verificar tu identidad antes de mostrarlo a las familias.</div>`;
-      $("#walkerDialog").showModal();
-      $("#walkerSettingsForm").addEventListener("submit", event => {
+      const profile = maxProfile;
+      const activities = ["Tiene perritos", "Practica bici", "Paseos a pie", "Sin correa"];
+      const sizes = ["Pequeño", "Mediano", "Grande"];
+      $("#profilesContent").innerHTML = `
+        <section>
+          <h3 style="margin:0 0 8px;font-size:16px">Paseador: ${escapeHtml(profile.name)}</h3>
+          <p class="hint">Este es el único perfil que aparecerá en el listado. Los datos no configurados se mantienen ocultos.</p>
+          <form id="maxProfileForm">
+            <div class="form-grid">
+              <div class="form-field full"><label for="maxArea">Zona o colonia</label><input id="maxArea" maxlength="80" value="${escapeHtml(profile.area)}" placeholder="Completa más adelante"></div>
+              <div class="form-field full"><label for="maxBio">Descripción</label><textarea id="maxBio" maxlength="500" placeholder="Agrega una descripción cuando esté lista">${escapeHtml(profile.bio)}</textarea></div>
+              <div class="form-field"><label for="maxPrice">Precio por paseo (opcional)</label><input id="maxPrice" type="number" min="1" step="1" value="${escapeHtml(profile.price)}" placeholder="Sin definir"></div>
+              <div class="form-field"><label for="maxAvailability">Horarios (separados por coma)</label><input id="maxAvailability" value="${escapeHtml(profile.availability.join(", "))}" placeholder="Ej. 09:00, 13:00"></div>
+              <div class="form-field full"><label for="maxPhoto">Foto de perfil (opcional)</label><input id="maxPhoto" type="file" accept="image/*"></div>
+              <div class="form-field full"><label>Tamaños de perro que puede pasear</label><div class="tags">${sizes.map(size => `<label class="tag"><input name="maxSizes" type="checkbox" value="${size}" ${profile.sizes.includes(size) ? "checked" : ""}> ${size}</label>`).join("")}</div></div>
+              <div class="form-field full"><label>Preferencias del paseador (opcional)</label><div class="tags">${activities.map(tag => `<label class="tag"><input name="maxTags" type="checkbox" value="${tag}" ${profile.tags.includes(tag) ? "checked" : ""}> ${tag}</label>`).join("")}</div></div>
+              <div class="form-field full"><label class="toggle-row" style="border:0;padding:0"><span>Disponible para nuevas reservas</span><input id="maxAvailable" type="checkbox" ${profile.available ? "checked" : ""}></label></div>
+            </div>
+            <div class="form-actions"><button class="button button-primary" type="submit">Guardar perfil de Max</button></div>
+          </form>
+        </section>
+        <section style="margin-top:25px;padding-top:20px;border-top:1px solid var(--line)">
+          <h3 style="margin:0 0 8px;font-size:16px">Perfil privado de desarrollador</h3>
+          <p class="hint">No aparece en el listado de paseadores. El nombre y rol se guardan solo en este navegador y no se publican en el sitio.</p>
+          <form id="developerProfileForm">
+            <div class="form-grid" style="margin-top:13px">
+              <div class="form-field"><label for="developerName">Nombre</label><input id="developerName" maxlength="80" value="${escapeHtml(developerProfile.name)}" placeholder="Nombre privado"></div>
+              <div class="form-field"><label for="developerRole">Rol</label><input id="developerRole" value="Desarrollador" readonly></div>
+            </div>
+            <div class="form-actions"><button class="button button-soft" type="submit">Guardar perfil privado</button></div>
+          </form>
+          <p id="profileFeedback" class="hint" role="status" aria-live="polite"></p>
+          <div class="notice">Este prototipo no tiene inicio de sesión ni base de datos. El perfil local no se comparte entre dispositivos y no debe usarse para guardar información sensible.</div>
+        </section>`;
+      $("#profilesDialog").showModal();
+      $("#maxProfileForm").addEventListener("submit", saveMaxProfile);
+      $("#developerProfileForm").addEventListener("submit", event => {
         event.preventDefault();
-        const start = $("#walkerStart").value;
-        const end = $("#walkerEnd").value;
-        if (start >= end) {
-          alert("La hora de fin debe ser posterior a la hora de inicio.");
-          return;
-        }
-        const settings = {
-          available: $("#walkerAvailable").checked,
-          start,
-          end,
-          weekdays: [...$("#walkerSettingsForm").querySelectorAll('input[name="weekdays"]:checked')].map(input => input.value)
-        };
-        store.write("pasea-walker-settings", settings);
-        alert("Horarios guardados en este navegador.");
-        $("#walkerDialog").close();
+        const savedProfile = { name: $("#developerName").value.trim(), role: "Desarrollador" };
+        store.write("pasea-developer-profile", savedProfile);
+        developerProfile.name = savedProfile.name;
+        $("#profileFeedback").textContent = "Perfil de desarrollador guardado solo en este navegador.";
       });
+    }
+
+    function saveMaxProfile(event) {
+      event.preventDefault();
+      const photo = $("#maxPhoto").files[0];
+      const save = photo ? resizePhoto(photo).then(dataUrl => applyMaxProfile(dataUrl)) : Promise.resolve(applyMaxProfile(maxProfile.photo));
+      save.catch(error => {
+        console.error("No se pudo preparar la foto del paseador.", error);
+        alert("No se pudo procesar la foto. Intenta con otra imagen.");
+      });
+    }
+
+    function applyMaxProfile(photo) {
+      const availability = $("#maxAvailability").value.split(",").map(time => time.trim()).filter(Boolean);
+      if (availability.some(time => !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
+        $("#profileFeedback").textContent = "Usa el formato de 24 horas para cada horario (por ejemplo, 09:00).";
+        return;
+      }
+      const priceValue = $("#maxPrice").value;
+      Object.assign(maxProfile, {
+        area: $("#maxArea").value.trim(),
+        bio: $("#maxBio").value.trim(),
+        price: priceValue ? Number(priceValue) : "",
+        photo,
+        availability,
+        available: $("#maxAvailable").checked,
+        sizes: [...$("#maxProfileForm").querySelectorAll('input[name="maxSizes"]:checked')].map(input => input.value),
+        tags: [...$("#maxProfileForm").querySelectorAll('input[name="maxTags"]:checked')].map(input => input.value)
+      });
+      store.write("pasea-max-profile", maxProfile);
+      renderWalkers();
+      $("#profileFeedback").textContent = "Perfil de Max guardado en este navegador. Para habilitar reservas también se requiere precio, horario y disponibilidad.";
     }
 
     function escapeHtml(value) {

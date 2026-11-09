@@ -4,22 +4,22 @@ Prototipo web responsive en español para buscar paseadores, registrar perritos 
 
 ## Funciones demostrativas
 
-- Búsqueda de paseadores por zona y tamaño de perro.
-- Perfiles de ejemplo con insignia de verificación, calificación, precio y preferencias como bicicleta, otros perros y uso de correa.
+- Listado con un solo paseador: Maximiliano Morales Alcántara.
+- Perfil editable de Max con zona, descripción, foto, precio, disponibilidad, horarios, tamaños de perro y preferencias.
+- Formulario local para guardar un perfil privado de desarrollador que no se muestra en el listado.
 - Registro de uno o más perros con nombre, cantidad, raza, tamaño, comportamiento y foto.
-- Solicitudes de paseo con fecha, horarios disponibles de ejemplo, dirección y teléfono de contacto.
-- Vista de paseos solicitados y configuración local de disponibilidad, días y horarios del paseador.
-- Resumen ilustrativo de comisión y pago al paseador.
+- Solicitudes de paseo cuando el perfil de Max tenga precio, horarios y disponibilidad configurados.
+- Vista de paseos solicitados.
 
-Los perfiles, fechas y calificaciones son datos de muestra. La información introducida se guarda únicamente en el almacenamiento local del navegador; no hay cuentas, base de datos ni sincronización entre dispositivos.
+No se muestran precios, reseñas, calificaciones ni verificaciones inventadas. La información introducida se guarda únicamente en el almacenamiento local del navegador; no hay cuentas, base de datos ni sincronización entre dispositivos. El perfil privado de desarrollador tampoco está autenticado ni cifrado: no guardes datos sensibles ahí.
 
 ## Pagos y comisión
 
-La pantalla muestra una comisión **de ejemplo** del 20% para la plataforma y 80% para el paseador. No se cobra dinero ni se hacen transferencias en este prototipo. Estos porcentajes no están establecidos como precio final.
+Los cobros están deshabilitados y no se muestran precios ni porcentajes de comisión. La tarifa y la distribución de ingresos se decidirán antes de habilitar pagos reales.
 
-Para operar pagos reales se necesita una entidad legal y una cuenta comercial, además de integrar un proveedor de pagos que admita marketplace y pagos a terceros —por ejemplo, Stripe Connect o una alternativa disponible en el país donde opere el servicio—. Cada paseador tendría que completar el alta y verificación de identidad exigida por el proveedor. El proveedor recibiría el pago del cliente, descontaría sus propias comisiones e impuestos aplicables, y transferiría al paseador el importe que corresponda; la plataforma recibiría su comisión según el contrato y la configuración del proveedor.
+Para operar pagos reales se necesita una entidad legal y una cuenta comercial, además de integrar un proveedor de pagos que admita marketplace y pagos a terceros. Cada paseador tendría que completar el alta y verificación de identidad exigida por el proveedor. El checkout debe alojarse en el proveedor de pagos; esta aplicación no debe recopilar datos de tarjetas.
 
-Antes de habilitar cobros hay que decidir el país y moneda de operación, comisión definitiva, quién absorbe comisiones e impuestos, reglas de cancelación/reembolso, tiempos de liberación, manejo de contracargos y requisitos fiscales. No se deben recopilar datos de tarjetas directamente en esta aplicación; el checkout de producción debe alojarse en el proveedor de pagos.
+Antes de habilitar cobros hay que decidir el país y moneda de operación, tarifa, quién absorbe comisiones e impuestos, reglas de cancelación/reembolso, tiempos de liberación, manejo de contracargos y requisitos fiscales.
 
 ## Para convertirlo en producto
 

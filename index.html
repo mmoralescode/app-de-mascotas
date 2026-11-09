@@ -521,33 +521,41 @@
         authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
           auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
         });
-        await loadWalkerProfiles();
-        const { data, error } = await authClient.auth.getSession();
-        if (error) throw error;
-        await setCurrentUser(data.session?.user || null);
         authClient.auth.onAuthStateChange((_event, session) => {
           setTimeout(() => {
-            if (_event === "PASSWORD_RECOVERY") {
-              $("#authTitle").textContent = "Crea tu contraseña";
-              $("#authForm").hidden = true;
-              $("#passwordRecoveryForm").hidden = false;
-              $("#loginTab").hidden = true;
-              $("#signupTab").hidden = true;
-              $("#staffLoginHint").hidden = true;
-              $("#authDialog").showModal();
-            }
+            if (_event === "PASSWORD_RECOVERY") showPasswordRecoveryForm();
             setCurrentUser(session?.user || null).catch(error => {
               console.error("No se pudo actualizar el perfil de la sesión.", error);
               setAuthMessage("No se pudo cargar el perfil de la cuenta.", true);
             });
           }, 0);
         });
+        await loadWalkerProfiles();
+        const { data, error } = await authClient.auth.getSession();
+        if (error) throw error;
+        await setCurrentUser(data.session?.user || null);
+        const query = new URLSearchParams(window.location.search);
+        const hash = new URLSearchParams(window.location.hash.slice(1));
+        if (query.get("type") === "recovery" || hash.get("type") === "recovery") {
+          showPasswordRecoveryForm();
+        }
       } catch (error) {
         console.error("No se pudo inicializar Supabase Auth.", error);
         $("#authConfigNotice").hidden = false;
         $("#authConfigNotice").textContent = "No se pudo conectar con Supabase. Revisa la URL y la clave pública configuradas.";
         $("#authSubmit").disabled = true;
       }
+    }
+
+    function showPasswordRecoveryForm() {
+      $("#authTitle").textContent = "Crea tu contraseña";
+      $("#authForm").hidden = true;
+      $("#passwordRecoveryForm").hidden = false;
+      $("#loginTab").hidden = true;
+      $("#signupTab").hidden = true;
+      $("#staffLoginHint").hidden = true;
+      $("#authMessage").textContent = "Escribe y confirma tu nueva contraseña para terminar.";
+      $("#authDialog").showModal();
     }
 
     let authMode = "login";

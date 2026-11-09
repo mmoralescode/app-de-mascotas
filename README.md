@@ -1,17 +1,42 @@
 # Pasea — app de paseos para mascotas
 
-Prototipo web responsive en español para buscar paseadores, registrar perritos y solicitar paseos. El proyecto es una página estática sin dependencias de compilación: abre `index.html` en un navegador o publícala con cualquier hosting estático.
+Prototipo web responsive en español para buscar paseadores, registrar perritos y solicitar paseos. La autenticación real utiliza Supabase Auth; la página sigue siendo estática y no requiere un proceso de compilación.
 
 ## Funciones demostrativas
 
 - Listado con un solo paseador: Maximiliano Morales Alcántara.
 - Perfil editable de Max con zona, descripción, foto, precio, disponibilidad, horarios, tamaños de perro y preferencias.
-- Formulario local para guardar un perfil privado de desarrollador que no se muestra en el listado.
+- Registro e inicio de sesión de clientes mediante Supabase Auth.
+- Acceso de Max como paseador y de Martín Morales como administrador, una vez asignados esos roles de forma administrativa en Supabase.
 - Registro de uno o más perros con nombre, cantidad, raza, tamaño, comportamiento y foto.
 - Solicitudes de paseo cuando el perfil de Max tenga precio, horarios y disponibilidad configurados.
 - Vista de paseos solicitados.
 
-No se muestran precios, reseñas, calificaciones ni verificaciones inventadas. La información introducida se guarda únicamente en el almacenamiento local del navegador; no hay cuentas, base de datos ni sincronización entre dispositivos. El perfil privado de desarrollador tampoco está autenticado ni cifrado: no guardes datos sensibles ahí.
+No se muestran precios, reseñas, calificaciones ni verificaciones inventadas. Supabase protege las cuentas y sus contraseñas. Los datos de mascotas, solicitudes y el perfil editable de Max todavía se guardan en el almacenamiento local por usuario/navegador; aún no se sincronizan con la base de datos ni con otros dispositivos.
+
+## Conectar Supabase Auth
+
+1. Crea un proyecto en Supabase.
+2. En **Project Settings → API**, copia el **Project URL** y la llave **anon/publicable** en `supabase-config.js`.
+3. En **SQL Editor**, ejecuta el contenido de `supabase-schema.sql`. La tabla `profiles` tiene RLS; cada registro nuevo obtiene rol `customer`. Los usuarios no pueden asignarse el rol `walker` ni `admin` desde el navegador.
+4. Crea cuentas con los correos de Max y Martín desde el formulario de clientes y confirma los correos si Supabase lo solicita.
+5. Desde el SQL Editor de Supabase, asigna los roles especiales a sus correos registrados:
+
+   ```sql
+   update public.profiles p
+   set role = 'walker'
+   from auth.users u
+   where p.id = u.id and lower(u.email) = lower('CORREO_DE_MAX');
+
+   update public.profiles p
+   set role = 'admin'
+   from auth.users u
+   where p.id = u.id and lower(u.email) = lower('CORREO_DE_MARTIN');
+   ```
+
+6. Publica los cambios para que Vercel los despliegue. Los correos de clientes deben confirmar la dirección según la configuración de autenticación de Supabase.
+
+La llave `anon`/publicable está diseñada para exponerse en el navegador; la seguridad depende de las políticas RLS incluidas en el esquema. **Nunca** pongas en `supabase-config.js` una llave `service_role`/secreta. La URL y la llave publicable aún no están configuradas, así que registro e inicio de sesión permanecerán deshabilitados hasta conectar un proyecto.
 
 ## Pagos y comisión
 

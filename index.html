@@ -23,6 +23,7 @@
     }
 
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; background: var(--canvas); color: var(--ink); }
     button, input, select, textarea { font: inherit; }
     button { cursor: pointer; }
@@ -40,6 +41,7 @@
     .button-quiet { background: transparent; color: var(--ink); }
     .button-soft { color: var(--green-dark); background: var(--mint); }
     .button-small { padding: 9px 12px; font-size: 13px; }
+    .button:disabled { opacity: .58; cursor: not-allowed; transform: none; }
 
     .hero { padding: 42px 0 35px; }
     .hero-panel { position: relative; overflow: hidden; min-height: 306px; border-radius: 26px; padding: 38px; display: flex; align-items: center; background: #e9f1e6; }
@@ -106,6 +108,9 @@
     .price-line { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; color: #52645a; font-size: 13px; }
     .price-line.total { margin-top: 6px; padding-top: 11px; border-top: 1px solid #dfe6de; color: var(--ink); font-size: 15px; font-weight: 850; }
     .notice { margin: 13px 0; padding: 11px 12px; border-radius: 10px; background: #fff5e3; color: #73531d; font-size: 12px; line-height: 1.5; }
+    .auth-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .auth-tabs .button { flex: 1; }
+    .auth-message { min-height: 20px; margin: 12px 0 0; color: var(--green-dark); font-size: 13px; line-height: 1.5; }
     .form-actions { margin-top: 17px; display: flex; justify-content: end; gap: 8px; }
     .success { padding: 15px 0; text-align: center; }
     .success-mark { width: 58px; height: 58px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 50%; background: var(--mint); color: var(--green); font-size: 27px; }
@@ -166,9 +171,10 @@
         Pasea
       </a>
       <nav class="nav" aria-label="Navegación principal">
-        <button class="button button-quiet button-small" id="myDogsButton">Mis perritos</button>
-        <button class="button button-quiet button-small" id="myBookingsButton">Mis paseos</button>
-        <button class="button button-primary button-small" id="walkerModeButton">Perfiles</button>
+        <button class="button button-quiet button-small" id="myDogsButton" hidden>Mis perritos</button>
+        <button class="button button-quiet button-small" id="myBookingsButton" hidden>Mis paseos</button>
+        <button class="button button-primary button-small" id="walkerModeButton" hidden>Perfiles</button>
+        <button class="button button-soft button-small" id="accountButton">Entrar</button>
       </nav>
     </div>
   </header>
@@ -237,7 +243,37 @@
     <div class="dialog-content" id="profilesContent"></div>
   </dialog>
 
-  <script>
+  <dialog id="authDialog" aria-labelledby="authTitle">
+    <div class="dialog-head"><h2 id="authTitle">Tu cuenta Pasea</h2><button class="icon-button" data-close="authDialog" aria-label="Cerrar">×</button></div>
+    <div class="dialog-content" id="authContent">
+      <div id="authConfigNotice" class="notice" hidden></div>
+      <div class="auth-tabs" role="tablist" aria-label="Acceso a Pasea">
+        <button class="button button-primary button-small" id="loginTab" role="tab" aria-selected="true">Iniciar sesión</button>
+        <button class="button button-soft button-small" id="signupTab" role="tab" aria-selected="false">Crear cuenta cliente</button>
+      </div>
+      <form id="authForm">
+        <div class="form-grid">
+          <div class="form-field full" id="authNameField" hidden><label for="authName">Tu nombre</label><input id="authName" name="name" autocomplete="name" maxlength="120"></div>
+          <div class="form-field full"><label for="authEmail">Correo electrónico</label><input id="authEmail" name="email" type="email" autocomplete="email" required></div>
+          <div class="form-field full"><label for="authPassword">Contraseña</label><input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="8" required></div>
+        </div>
+        <div class="form-actions"><button class="button button-primary" id="authSubmit" type="submit">Iniciar sesión</button></div>
+      </form>
+      <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
+      <p class="hint" id="staffLoginHint">Max y Martín: entren con sus correos registrados. El rol de paseador o administrador lo asigna el administrador en Supabase.</p>
+      <p class="hint">Las contraseñas las gestiona Supabase. Mientras se configura la base de datos, los datos de perritos, horarios y solicitudes siguen guardándose solo en este navegador.</p>
+      <button class="button button-quiet button-small" id="signOutButton" hidden>Cerrar sesión</button>
+    </div>
+  </dialog>
+
+  <script type="module">
+    import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase-config.js";
+
+    const AUTH_SDK_URL = "https://esm.sh/@supabase/supabase-js@2";
+    let authClient = null;
+    let currentUser = null;
+    let currentProfile = null;
+
     const store = {
       read(key, fallback) {
         try {
@@ -271,10 +307,9 @@
       available: false
     };
     const maxProfile = { ...defaultMaxProfile, ...store.read("pasea-max-profile", {}) };
-    const developerProfile = store.read("pasea-developer-profile", { name: "", role: "Desarrollador" });
     const walkers = [maxProfile];
-    let dogs = store.read("pasea-dogs", []);
-    let bookings = store.read("pasea-bookings", []);
+    let dogs = [];
+    let bookings = [];
     let filters = { location: "", date: "", size: "" };
     let currentWalker = null;
     const $ = (selector, root = document) => root.querySelector(selector);
@@ -284,6 +319,159 @@
     $("#year").textContent = today.getFullYear();
     $("#searchDate").min = localDate;
     $("#searchDate").value = localDate;
+
+    function userStorageKey(type) {
+      if (!currentUser) throw new Error("Se requiere una cuenta para acceder a estos datos.");
+      return `pasea-${type}-${currentUser.id}`;
+    }
+
+    function loadUserData() {
+      dogs = currentUser ? store.read(userStorageKey("dogs"), []) : [];
+      bookings = currentUser ? store.read(userStorageKey("bookings"), []) : [];
+    }
+
+    function setAuthMessage(message, isError = false) {
+      const element = $("#authMessage");
+      element.textContent = message;
+      element.style.color = isError ? "#a7372f" : "";
+    }
+
+    function renderAccountButton() {
+      const button = $("#accountButton");
+      button.textContent = currentProfile ? `Hola, ${currentProfile.full_name.split(" ")[0]}` : "Entrar";
+      button.classList.toggle("button-primary", !currentProfile);
+      button.classList.toggle("button-soft", Boolean(currentProfile));
+    }
+
+    async function setCurrentUser(user) {
+      currentUser = user;
+      currentProfile = null;
+      if (user && authClient) {
+        const { data, error } = await authClient.from("profiles").select("id, full_name, role").eq("id", user.id).maybeSingle();
+        if (error) {
+          console.error("No se pudo cargar el perfil de la cuenta.", error);
+          setAuthMessage("No se pudo cargar tu perfil. Revisa la configuración de Supabase.", true);
+        } else {
+          currentProfile = data;
+        }
+      }
+      loadUserData();
+      renderAccountButton();
+      $("#myDogsButton").hidden = !currentProfile || currentProfile.role !== "customer";
+      $("#myBookingsButton").hidden = !currentProfile || currentProfile.role !== "customer";
+      $("#walkerModeButton").hidden = !currentProfile || !["walker", "admin"].includes(currentProfile.role);
+    }
+
+    async function initializeAuth() {
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        $("#authConfigNotice").hidden = false;
+        $("#authConfigNotice").textContent = "El acceso seguro todavía no está conectado. Primero configura el proyecto de Supabase y las llaves públicas en supabase-config.js.";
+        $("#authSubmit").disabled = true;
+        return;
+      }
+      try {
+        const { createClient } = await import(AUTH_SDK_URL);
+        authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+        });
+        const { data, error } = await authClient.auth.getSession();
+        if (error) throw error;
+        await setCurrentUser(data.session?.user || null);
+        authClient.auth.onAuthStateChange((_event, session) => {
+          setTimeout(() => {
+            setCurrentUser(session?.user || null).catch(error => {
+              console.error("No se pudo actualizar el perfil de la sesión.", error);
+              setAuthMessage("No se pudo cargar el perfil de la cuenta.", true);
+            });
+          }, 0);
+        });
+      } catch (error) {
+        console.error("No se pudo inicializar Supabase Auth.", error);
+        $("#authConfigNotice").hidden = false;
+        $("#authConfigNotice").textContent = "No se pudo conectar con Supabase. Revisa la URL y la clave pública configuradas.";
+        $("#authSubmit").disabled = true;
+      }
+    }
+
+    let authMode = "login";
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      const signup = mode === "signup";
+      $("#authTitle").textContent = signup ? "Crea tu cuenta de cliente" : currentProfile ? "Tu cuenta Pasea" : "Inicia sesión";
+      $("#authNameField").hidden = !signup;
+      $("#authName").required = signup;
+      $("#authPassword").autocomplete = signup ? "new-password" : "current-password";
+      $("#authSubmit").textContent = signup ? "Crear cuenta" : "Iniciar sesión";
+      $("#loginTab").classList.toggle("button-primary", !signup);
+      $("#loginTab").classList.toggle("button-soft", signup);
+      $("#signupTab").classList.toggle("button-primary", signup);
+      $("#signupTab").classList.toggle("button-soft", !signup);
+      $("#loginTab").setAttribute("aria-selected", String(!signup));
+      $("#signupTab").setAttribute("aria-selected", String(signup));
+      $("#authForm").hidden = Boolean(currentProfile);
+      $("#loginTab").hidden = Boolean(currentProfile);
+      $("#signupTab").hidden = Boolean(currentProfile);
+      $("#staffLoginHint").hidden = signup || Boolean(currentProfile);
+      $("#signOutButton").hidden = !currentProfile;
+      setAuthMessage(currentProfile
+        ? `${currentProfile.full_name} · ${currentProfile.role === "admin" ? "Administrador" : currentProfile.role === "walker" ? "Paseador" : "Cliente"}`
+        : "");
+    }
+
+    async function handleAuthSubmit(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity() || !authClient) return;
+      const email = $("#authEmail").value.trim();
+      const password = $("#authPassword").value;
+      $("#authSubmit").disabled = true;
+      setAuthMessage(authMode === "signup" ? "Creando tu cuenta…" : "Iniciando sesión…");
+      try {
+        if (authMode === "signup") {
+          const fullName = $("#authName").value.trim();
+          const { data, error } = await authClient.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName } }
+          });
+          if (error) throw error;
+          if (!data.session) {
+            form.reset();
+            setAuthMessage("Cuenta creada. Revisa tu correo para confirmar la dirección y luego inicia sesión.");
+            return;
+          }
+          await setCurrentUser(data.user);
+          setAuthMode("login");
+          setAuthMessage("Tu cuenta de cliente está lista. Ahora agrega los datos de tu perrito.");
+          form.reset();
+          $("#authDialog").close();
+          openDogs();
+        } else {
+          const { data, error } = await authClient.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          await setCurrentUser(data.user);
+          if (!currentProfile) {
+            await authClient.auth.signOut();
+            await setCurrentUser(null);
+            throw new Error("Tu cuenta no tiene un perfil asignado. Pide al administrador que la configure.");
+          }
+          form.reset();
+          setAuthMode("login");
+          $("#authDialog").close();
+        }
+      } catch (error) {
+        console.error("No se pudo completar la autenticación.", error);
+        setAuthMessage(error.message || "No se pudo completar la operación. Revisa tus datos e inténtalo de nuevo.", true);
+      } finally {
+        $("#authSubmit").disabled = false;
+      }
+    }
+
+    function openAuth(mode = "login") {
+      setAuthMode(currentProfile ? "login" : mode);
+      $("#authDialog").showModal();
+    }
 
     function renderWalkers() {
       const location = filters.location.trim().toLocaleLowerCase("es");
@@ -358,6 +546,11 @@
     }
 
     function openBooking(walkerId) {
+      if (!currentProfile || currentProfile.role !== "customer") {
+        openAuth("login");
+        setAuthMessage("Inicia sesión con una cuenta de cliente para solicitar un paseo.");
+        return;
+      }
       currentWalker = walkers.find(walker => walker.id === walkerId);
       if (!dogs.length) {
         alert("Agrega primero los datos de tu perrito para continuar con la reserva.");
@@ -402,12 +595,17 @@
         status: "Pendiente de confirmación"
       };
       bookings = [booking, ...bookings];
-      store.write("pasea-bookings", bookings);
+      store.write(userStorageKey("bookings"), bookings);
       $("#bookingContent").innerHTML = `<div class="success"><div class="success-mark">✓</div><h3>¡Solicitud enviada!</h3><p>Tu paseo con <strong>${escapeHtml(booking.walker)}</strong> para <strong>${escapeHtml(booking.dog)}</strong> quedó guardado para el ${formatDate(booking.date)} a las ${escapeHtml(booking.time)}.<br><br>El cobro real se habilitará al integrar un proveedor de pagos.</p><div class="form-actions"><button class="button button-primary" id="doneBooking">Listo</button></div></div>`;
       $("#doneBooking").addEventListener("click", () => $("#bookingDialog").close());
     }
 
     function openDogs() {
+      if (!currentProfile || currentProfile.role !== "customer") {
+        openAuth("login");
+        setAuthMessage("Crea una cuenta o inicia sesión como cliente para agregar a tu perrito.");
+        return;
+      }
       renderDogs();
       $("#dogsDialog").showModal();
     }
@@ -447,7 +645,7 @@
         behavior: $("#dogBehavior").value.trim(),
         photo
       });
-      store.write("pasea-dogs", dogs);
+      store.write(userStorageKey("dogs"), dogs);
       renderDogs();
     }
 
@@ -473,11 +671,21 @@
     }
 
     function renderBookings() {
+      if (!currentProfile || currentProfile.role !== "customer") {
+        openAuth("login");
+        setAuthMessage("Inicia sesión con tu cuenta de cliente para ver tus paseos.");
+        return;
+      }
       $("#bookingsContent").innerHTML = bookings.length ? bookings.map(booking => `<div class="booking-row"><strong>${escapeHtml(booking.dog)} con ${escapeHtml(booking.walker)}</strong><small>${formatDate(booking.date)} · ${escapeHtml(booking.time)} · ${money(booking.price)} · ${escapeHtml(booking.status)}</small><br><small>${escapeHtml(booking.address)}</small></div>`).join("") : `<p class="hint">Aquí aparecerán tus solicitudes de paseo.</p>`;
       $("#bookingsDialog").showModal();
     }
 
     function renderWalkerMode() {
+      if (!currentProfile || !["walker", "admin"].includes(currentProfile.role)) {
+        openAuth("login");
+        setAuthMessage("Solo Max y la cuenta de desarrollo autorizada pueden abrir estos perfiles.");
+        return;
+      }
       const profile = maxProfile;
       const activities = ["Tiene perritos", "Practica bici", "Paseos a pie", "Sin correa"];
       const sizes = ["Pequeño", "Mediano", "Grande"];
@@ -499,28 +707,14 @@
             <div class="form-actions"><button class="button button-primary" type="submit">Guardar perfil de Max</button></div>
           </form>
         </section>
-        <section style="margin-top:25px;padding-top:20px;border-top:1px solid var(--line)">
-          <h3 style="margin:0 0 8px;font-size:16px">Perfil privado de desarrollador</h3>
-          <p class="hint">No aparece en el listado de paseadores. El nombre y rol se guardan solo en este navegador y no se publican en el sitio.</p>
-          <form id="developerProfileForm">
-            <div class="form-grid" style="margin-top:13px">
-              <div class="form-field"><label for="developerName">Nombre</label><input id="developerName" maxlength="80" value="${escapeHtml(developerProfile.name)}" placeholder="Nombre privado"></div>
-              <div class="form-field"><label for="developerRole">Rol</label><input id="developerRole" value="Desarrollador" readonly></div>
-            </div>
-            <div class="form-actions"><button class="button button-soft" type="submit">Guardar perfil privado</button></div>
-          </form>
-          <p id="profileFeedback" class="hint" role="status" aria-live="polite"></p>
-          <div class="notice">Este prototipo no tiene inicio de sesión ni base de datos. El perfil local no se comparte entre dispositivos y no debe usarse para guardar información sensible.</div>
-        </section>`;
+        ${currentProfile.role === "admin" ? `<section style="margin-top:25px;padding-top:20px;border-top:1px solid var(--line)">
+          <h3 style="margin:0 0 8px;font-size:16px">Cuenta privada de desarrollo</h3>
+          <p class="hint">Esta cuenta solo tiene acceso de administración y no aparece como paseador público.</p>
+          <p class="hint" style="margin-top:10px">${escapeHtml(currentProfile.full_name)} · ${escapeHtml(currentUser.email)}</p>
+        </section>` : ""}
+        <p id="profileFeedback" class="auth-message" role="status" aria-live="polite"></p>`;
       $("#profilesDialog").showModal();
       $("#maxProfileForm").addEventListener("submit", saveMaxProfile);
-      $("#developerProfileForm").addEventListener("submit", event => {
-        event.preventDefault();
-        const savedProfile = { name: $("#developerName").value.trim(), role: "Desarrollador" };
-        store.write("pasea-developer-profile", savedProfile);
-        developerProfile.name = savedProfile.name;
-        $("#profileFeedback").textContent = "Perfil de desarrollador guardado solo en este navegador.";
-      });
     }
 
     function saveMaxProfile(event) {
@@ -579,6 +773,21 @@
     $("#myDogsButton").addEventListener("click", openDogs);
     $("#myBookingsButton").addEventListener("click", renderBookings);
     $("#walkerModeButton").addEventListener("click", renderWalkerMode);
+    $("#accountButton").addEventListener("click", () => openAuth());
+    $("#loginTab").addEventListener("click", () => setAuthMode("login"));
+    $("#signupTab").addEventListener("click", () => setAuthMode("signup"));
+    $("#authForm").addEventListener("submit", handleAuthSubmit);
+    $("#signOutButton").addEventListener("click", async () => {
+      if (!authClient) return;
+      const { error } = await authClient.auth.signOut();
+      if (error) {
+        console.error("No se pudo cerrar la sesión.", error);
+        setAuthMessage("No se pudo cerrar la sesión. Inténtalo de nuevo.", true);
+        return;
+      }
+      await setCurrentUser(null);
+      $("#authDialog").close();
+    });
     document.addEventListener("click", event => {
       const closeButton = event.target.closest("[data-close]");
       if (closeButton) document.getElementById(closeButton.dataset.close).close();
@@ -588,6 +797,12 @@
     }));
 
     renderWalkers();
+    initializeAuth().catch(error => {
+      console.error("No se pudo inicializar la autenticación.", error);
+      $("#authConfigNotice").hidden = false;
+      $("#authConfigNotice").textContent = "No se pudo conectar con Supabase. Revisa la configuración del proyecto.";
+      $("#authSubmit").disabled = true;
+    });
   </script>
 </body>
 </html>

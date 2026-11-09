@@ -1,56 +1,43 @@
 # Pasea — app de paseos para mascotas
 
-Prototipo web responsive en español para buscar paseadores, registrar perritos y solicitar paseos. La autenticación real utiliza Supabase Auth; la página sigue siendo estática y no requiere un proceso de compilación.
+Aplicación web responsive en español para buscar paseadores, registrar perritos y solicitar paseos. La autenticación utiliza Supabase Auth; la página es estática y no requiere un proceso de compilación.
 
-## Funciones demostrativas
+## Funciones
 
 - Listado con un solo paseador: Maximiliano Morales Alcántara.
-- Perfil editable de Max con zona, descripción, foto, precio, disponibilidad, horarios, tamaños de perro y preferencias.
+- Perfil editable de Max con zona, descripción, foto, precio, días y horarios, tamaños de perro y preferencias; se sincroniza con Supabase.
 - Registro e inicio de sesión de clientes mediante Supabase Auth.
-- Acceso de Max como paseador y de Martín Morales como administrador, una vez asignados esos roles de forma administrativa en Supabase.
-- Registro de uno o más perros con nombre, cantidad, raza, tamaño, comportamiento y foto.
-- Solicitudes de paseo cuando el perfil de Max tenga precio, horarios y disponibilidad configurados.
-- Vista de paseos solicitados.
+- Registro en la nube de perros y fotos privadas para cada cuenta.
+- Solicitudes de paseo con fecha, horario publicado, perro, domicilio, teléfono y precio; Max puede confirmar o rechazar.
+- Vistas separadas de solicitudes para el cliente y el paseador, con controles de acceso en Supabase.
 
-No se muestran precios, reseñas, calificaciones ni verificaciones inventadas. Supabase protege las cuentas y sus contraseñas. Los datos de mascotas, solicitudes y el perfil editable de Max todavía se guardan en el almacenamiento local por usuario/navegador; aún no se sincronizan con la base de datos ni con otros dispositivos.
+No se muestran reseñas, calificaciones ni verificaciones inventadas. Los datos de contacto y domicilio de una solicitud solo son visibles para el cliente y el paseador asignado. No se procesan pagos en la app.
 
-## Supabase Auth
+## Supabase: base de datos y almacenamiento
 
-Supabase Auth ya está conectado en `supabase-config.js`, el esquema de `supabase-schema.sql` ya se ejecutó en el proyecto, y la URL de Vercel está permitida como retorno después de confirmar el correo.
+Supabase Auth ya está conectado en `supabase-config.js` y `supabase-schema.sql` ya se ejecutó en el proyecto. Para habilitar perfiles compartidos, fotos y solicitudes:
 
-1. Max y Martín deben crear sus cuentas desde **Entrar → Crear cuenta cliente** con los correos que usarán. Confirmen esos correos si Supabase lo solicita.
-2. Después de crear las cuentas, desde el SQL Editor de Supabase asigna el rol adecuado por correo:
+1. Abre el SQL Editor del proyecto Supabase.
+2. Copia y ejecuta el contenido de `supabase-marketplace.sql`. Esto crea las tablas de perfiles, perros y solicitudes, las políticas RLS y los buckets de fotos (público para perfiles de paseadores y privado para mascotas).
+3. Max y Martín deben aceptar las invitaciones que recibieron y crear sus contraseñas. Los roles actuales son `walker` para Max y `admin` para Martín.
 
-   ```sql
-   update public.profiles p
-   set role = 'walker'
-   from auth.users u
-   where p.id = u.id and lower(u.email) = lower('CORREO_DE_MAX');
+Las fotos se redimensionan antes de subirlas y cada archivo se limita a 2 MB en el bucket. El perfil de paseador solo se muestra como disponible cuando Max publica precio, al menos un día y un horario. Al solicitar un paseo, el cliente elige una fecha/horario, registra el domicilio y teléfono de recogida, y recibe una solicitud pendiente; Max la confirma o rechaza desde **Perfiles → Solicitudes de paseo**. El precio se informa, pero no se cobra desde la app.
 
-   update public.profiles p
-   set role = 'admin'
-   from auth.users u
-   where p.id = u.id and lower(u.email) = lower('CORREO_DE_MARTIN');
-   ```
+La app usa el plan gratuito de Supabase, sujeto a sus cuotas y condiciones vigentes; no integra servicios de pago externos. Las cuotas gratuitas tienen límites y pueden cambiar. Si se exceden, Supabase puede requerir una pausa o un cambio de plan para seguir utilizando el proyecto.
 
-3. Max inicia sesión con su cuenta de paseador; Martín inicia sesión con su cuenta de administrador. Los roles no se pueden cambiar desde el navegador.
+Las políticas de seguridad a nivel de fila (RLS) restringen la lectura y modificación de datos. La llave `anon`/publicable está diseñada para exponerse en el navegador; **nunca** pongas en `supabase-config.js` una llave `service_role`/secreta.
 
-La llave `anon`/publicable está diseñada para exponerse en el navegador; la seguridad depende de las políticas RLS incluidas en el esquema. **Nunca** pongas en `supabase-config.js` una llave `service_role`/secreta.
+La primera vez que Max o Martín inicie sesión en este navegador, la app intenta importar el perfil anterior guardado localmente, si lo había. Los datos viejos de perros también se importan al iniciar sesión en la cuenta de cliente correspondiente. La importación no borra el respaldo local.
 
 ## Pagos y comisión
 
-Los cobros están deshabilitados y no se muestran precios ni porcentajes de comisión. La tarifa y la distribución de ingresos se decidirán antes de habilitar pagos reales.
+Los cobros están deshabilitados y no se muestran comisiones. Antes de habilitar pagos reales se deberán decidir el país y moneda de operación, tarifas, impuestos, cancelaciones y reembolsos, además de elegir un proveedor que permita pagar a terceros.
 
-Para operar pagos reales se necesita una entidad legal y una cuenta comercial, además de integrar un proveedor de pagos que admita marketplace y pagos a terceros. Cada paseador tendría que completar el alta y verificación de identidad exigida por el proveedor. El checkout debe alojarse en el proveedor de pagos; esta aplicación no debe recopilar datos de tarjetas.
+## Siguientes mejoras
 
-Antes de habilitar cobros hay que decidir el país y moneda de operación, tarifa, quién absorbe comisiones e impuestos, reglas de cancelación/reembolso, tiempos de liberación, manejo de contracargos y requisitos fiscales.
-
-## Para convertirlo en producto
-
-1. Mover los datos de mascotas, perfiles, disponibilidad y reservas de `localStorage` a tablas con políticas RLS.
-2. Crear almacenamiento seguro para documentos de verificación y fotos de mascotas.
-3. Implementar revisión administrativa antes de publicar perfiles y un flujo de reseñas ligado a paseos completados.
-4. Integrar pagos divididos con el proveedor elegido, webhooks firmados y conciliación de transferencias.
-5. Añadir controles de acceso, protección de datos, consentimiento para ubicación/fotos, políticas de privacidad y términos locales.
+1. Agregar fechas no recurrentes, duración del paseo y reglas para cancelaciones/reagendados.
+2. Implementar revisión administrativa antes de publicar perfiles y reseñas ligadas a paseos completados.
+3. Definir políticas de privacidad, consentimiento para domicilios y fotos, y términos locales.
+4. Integrar pagos solo después de elegir un proveedor y revisar sus tarifas, cuotas y requisitos legales.
 
 No agregues llaves privadas ni credenciales al repositorio. Usa variables de entorno y configura sus valores únicamente en el servicio de despliegue.

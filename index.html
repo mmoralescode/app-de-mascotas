@@ -185,7 +185,7 @@
         <div class="hero-copy">
           <div class="eyebrow">Más movimiento, más colitas felices</div>
           <h1 id="hero-title">Su próximo paseo empieza con alguien de confianza.</h1>
-          <p>Conoce a las personas que cuidarán a tu perrito y prepara su próximo paseo.</p>
+          <p>Revisa la disponibilidad de Max, solicita un paseo y recibe su confirmación en tu cuenta.</p>
         </div>
         <img class="hero-dog" src="https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&amp;fit=crop&amp;w=650&amp;q=85" alt="Golden retriever listo para salir a pasear">
       </div>
@@ -215,13 +215,13 @@
     </section>
 
     <section class="trust-row" aria-label="Beneficios">
-      <div class="trust-item"><div class="trust-icon" aria-hidden="true">✓</div><div><strong>Perfiles en preparación</strong><small>Agregaremos los detalles antes de abrir reservas.</small></div></div>
+      <div class="trust-item"><div class="trust-icon" aria-hidden="true">✓</div><div><strong>Solicitud con confirmación</strong><small>Elige fecha y horario; Max confirma o rechaza la solicitud.</small></div></div>
       <div class="trust-item"><div class="trust-icon" aria-hidden="true">☆</div><div><strong>Calificaciones más adelante</strong><small>Las reseñas se agregarán después de los paseos.</small></div></div>
       <div class="trust-item"><div class="trust-icon" aria-hidden="true">♡</div><div><strong>Un paseo a su estilo</strong><small>Cuéntanos qué hace feliz a tu perrito.</small></div></div>
     </section>
   </main>
 
-  <footer><div class="wrap footer-inner"><span>© <span id="year"></span> Pasea. Hecho para quienes mueven la cola.</span><span>Prototipo de demostración · Los cobros aún no están habilitados.</span></div></footer>
+  <footer><div class="wrap footer-inner"><span>© <span id="year"></span> Pasea. Hecho para quienes mueven la cola.</span><span>Solicitudes en línea · Los cobros aún no están habilitados.</span></div></footer>
 
   <dialog id="bookingDialog" aria-labelledby="bookingTitle">
     <div class="dialog-head"><h2 id="bookingTitle">Agenda un paseo</h2><button class="icon-button" data-close="bookingDialog" aria-label="Cerrar">×</button></div>
@@ -261,7 +261,7 @@
       </form>
       <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
       <p class="hint" id="staffLoginHint">Max y Martín: entren con sus correos registrados. El rol de paseador o administrador lo asigna el administrador en Supabase.</p>
-      <p class="hint">Las contraseñas las gestiona Supabase. Mientras se configura la base de datos, los datos de perritos, horarios y solicitudes siguen guardándose solo en este navegador.</p>
+      <p class="hint">Las contraseñas y los datos de tu cuenta se gestionan de forma segura con Supabase. No compartas tu contraseña con nadie.</p>
       <button class="button button-quiet button-small" id="signOutButton" hidden>Cerrar sesión</button>
     </div>
   </dialog>
@@ -304,12 +304,12 @@
       sizes: [],
       tags: [],
       availability: [],
+      availabilityDays: [],
       available: false
     };
-    const maxProfile = { ...defaultMaxProfile, ...store.read("pasea-max-profile", {}) };
+    let maxProfile = { ...defaultMaxProfile };
     const walkers = [maxProfile];
     let dogs = [];
-    let bookings = [];
     let filters = { location: "", date: "", size: "" };
     let currentWalker = null;
     const $ = (selector, root = document) => root.querySelector(selector);
@@ -325,9 +325,132 @@
       return `pasea-${type}-${currentUser.id}`;
     }
 
-    function loadUserData() {
-      dogs = currentUser ? store.read(userStorageKey("dogs"), []) : [];
-      bookings = currentUser ? store.read(userStorageKey("bookings"), []) : [];
+    async function uploadPhoto(dataUrl, bucket, path) {
+      const [header, encoded] = dataUrl.split(",");
+      const mimeType = header.match(/data:(.*?);base64/)?.[1];
+      if (!mimeType || !encoded) throw new Error("La imagen seleccionada no tiene un formato válido.");
+      const binary = atob(encoded);
+      const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+      const { error } = await authClient.storage.from(bucket).upload(path, new Blob([bytes], { type: mimeType }), {
+        contentType: mimeType,
+        upsert: false
+      });
+      if (error) throw error;
+      return path;
+    }
+
+    async function signedPetPhoto(path) {
+      if (!path) return "";
+      const { data, error } = await authClient.storage.from("pet-photos").createSignedUrl(path, 3600);
+      if (error) throw error;
+      return data.signedUrl;
+    }
+
+    async function loadUserData() {
+      dogs = [];
+      if (!currentUser || currentProfile?.role !== "customer") return;
+      const { data, error } = await authClient.from("customer_dogs")
+        .select("*").eq("customer_id", currentUser.id).order("created_at", { ascending: true });
+      if (error) throw error;
+      let dogRows = data;
+      const migratedKey = `pasea-dogs-migrated-${currentUser.id}`;
+      const legacyDogs = store.read(userStorageKey("dogs"), []);
+      if (!dogRows.length && !localStorage.getItem(migratedKey) && legacyDogs.length) {
+        dogRows = [];
+        for (const dog of legacyDogs) {
+          const photoPath = dog.photo
+            ? await uploadPhoto(dog.photo, "pet-photos", `${currentUser.id}/${crypto.randomUUID()}.jpg`)
+            : null;
+          const { data: savedDog, error: saveError } = await authClient.from("customer_dogs").insert({
+            customer_id: currentUser.id,
+            name: dog.name,
+            count: dog.count,
+            breed: dog.breed,
+            size: dog.size,
+            behavior: dog.behavior,
+            photo_path: photoPath
+          }).select("*").single();
+          if (saveError) throw saveError;
+          dogRows.push(savedDog);
+        }
+      }
+      localStorage.setItem(migratedKey, "true");
+      dogs = await Promise.all(dogRows.map(async dog => ({ ...dog, photo: await signedPetPhoto(dog.photo_path) })));
+    }
+
+    function mapWalkerProfile(row) {
+      const { data } = authClient.storage.from("walker-photos").getPublicUrl(row.photo_path || "");
+      return {
+        id: row.user_id,
+        name: row.display_name,
+        area: row.area,
+        bio: row.bio,
+        price: row.price_mxn ?? "",
+        photo: row.photo_path ? data.publicUrl : "",
+        photoPath: row.photo_path,
+        sizes: row.sizes || [],
+        tags: row.preferences || [],
+        availability: row.availability || [],
+        availabilityDays: row.availability_days || [],
+        available: row.is_available
+      };
+    }
+
+    async function loadWalkerProfiles() {
+      const { data, error } = await authClient.from("walker_profiles")
+        .select("*").order("display_name", { ascending: true });
+      if (error) throw error;
+      const profiles = data.map(mapWalkerProfile);
+      walkers.splice(0, walkers.length, ...profiles);
+      maxProfile = profiles[0] || { ...defaultMaxProfile };
+      renderWalkers();
+    }
+
+    async function migrateLegacyWalkerProfile() {
+      const migrationKey = `pasea-walker-profile-migrated-${currentUser.id}`;
+      if (localStorage.getItem(migrationKey)) return;
+      const legacy = store.read("pasea-max-profile", null);
+      if (!legacy) {
+        localStorage.setItem(migrationKey, "true");
+        return;
+      }
+      const existing = walkers.find(walker => walker.id === currentUser.id) || maxProfile;
+      const hasCloudProfile = existing.area || existing.bio || existing.price || existing.photoPath ||
+        existing.availability.length || existing.availabilityDays.length || existing.sizes.length || existing.tags.length;
+      if (hasCloudProfile) {
+        localStorage.setItem(migrationKey, "true");
+        return;
+      }
+      const photoPath = legacy.photo?.startsWith("data:image/")
+        ? await uploadPhoto(legacy.photo, "walker-photos", `${existing.id}/${crypto.randomUUID()}.jpg`)
+        : null;
+      const row = {
+        user_id: existing.id,
+        display_name: existing.name,
+        area: legacy.area || "",
+        bio: legacy.bio || "",
+        price_mxn: legacy.price ? Number(legacy.price) : null,
+        photo_path: photoPath,
+        sizes: legacy.sizes || [],
+        preferences: legacy.tags || [],
+        availability: legacy.availability || [],
+        availability_days: legacy.availabilityDays || [],
+        is_available: Boolean(legacy.available && legacy.availability?.length && legacy.availabilityDays?.length && legacy.price),
+        updated_at: new Date().toISOString()
+      };
+      const { data, error } = await authClient.from("walker_profiles")
+        .upsert(row, { onConflict: "user_id" }).select("*").single();
+      if (error) {
+        if (photoPath) await authClient.storage.from("walker-photos").remove([photoPath]);
+        throw error;
+      }
+      const migrated = mapWalkerProfile(data);
+      const index = walkers.findIndex(walker => walker.id === migrated.id);
+      if (index === -1) walkers.push(migrated);
+      else walkers[index] = migrated;
+      maxProfile = walkers[0] || migrated;
+      localStorage.setItem(migrationKey, "true");
+      renderWalkers();
     }
 
     function setAuthMessage(message, isError = false) {
@@ -355,11 +478,19 @@
           currentProfile = data;
         }
       }
-      loadUserData();
       renderAccountButton();
       $("#myDogsButton").hidden = !currentProfile || currentProfile.role !== "customer";
       $("#myBookingsButton").hidden = !currentProfile || currentProfile.role !== "customer";
       $("#walkerModeButton").hidden = !currentProfile || !["walker", "admin"].includes(currentProfile.role);
+      try {
+        if (currentProfile && ["walker", "admin"].includes(currentProfile.role)) {
+          await migrateLegacyWalkerProfile();
+        }
+        await loadUserData();
+      } catch (error) {
+        console.error("No se pudieron cargar los datos de la cuenta.", error);
+        setAuthMessage("No se pudieron cargar tus datos. Revisa la conexión e inténtalo de nuevo.", true);
+      }
     }
 
     async function initializeAuth() {
@@ -374,6 +505,7 @@
         authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
           auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
         });
+        await loadWalkerProfiles();
         const { data, error } = await authClient.auth.getSession();
         if (error) throw error;
         await setCurrentUser(data.session?.user || null);
@@ -477,8 +609,9 @@
       const location = filters.location.trim().toLocaleLowerCase("es");
       const found = walkers.filter(walker => {
         const areaMatch = !location || walker.area.toLocaleLowerCase("es").includes(location) || walker.name.toLocaleLowerCase("es").includes(location);
-        const sizeMatch = !filters.size || walker.sizes.includes(filters.size);
-        return areaMatch && sizeMatch;
+        const sizeMatch = !filters.size || !walker.sizes.length || walker.sizes.includes(filters.size);
+        const dayMatch = !filters.date || walker.availabilityDays.includes(new Date(`${filters.date}T12:00:00`).getDay());
+        return areaMatch && sizeMatch && dayMatch;
       });
       $("#clearFiltersButton").hidden = !location && !filters.size && !filters.date;
       $("#resultsLabel").textContent = found.length ? "Un perfil de paseador, con información en preparación." : "No encontramos perfiles para esa búsqueda.";
@@ -528,17 +661,25 @@
         });
         const bottom = document.createElement("div");
         bottom.className = "walker-bottom";
+        const price = document.createElement("strong");
+        price.className = "price";
+        price.textContent = walker.price ? `${money(walker.price)} ` : "Precio pendiente";
+        if (walker.price) {
+          const unit = document.createElement("small");
+          unit.textContent = "/ paseo";
+          price.append(unit);
+        }
         const button = document.createElement("button");
         button.className = "button button-soft button-small";
-        button.textContent = "Próximamente";
+        button.textContent = "No disponible";
         button.disabled = true;
-        if (walker.price && walker.availability.length && walker.available) {
+        if (walker.price && walker.availability.length && walker.availabilityDays.length && walker.available) {
           button.className = "button button-primary button-small";
-          button.textContent = "Ver horarios";
+          button.textContent = "Solicitar paseo";
           button.disabled = false;
           button.addEventListener("click", () => openBooking(walker.id));
         }
-        bottom.append(button);
+        bottom.append(price, button);
         body.append(heading, meta, tags, bottom);
         card.append(photo, body);
         list.append(card);
@@ -552,13 +693,17 @@
         return;
       }
       currentWalker = walkers.find(walker => walker.id === walkerId);
+      if (!currentWalker) {
+        alert("No se pudo encontrar el perfil de este paseador. Actualiza la página e inténtalo de nuevo.");
+        return;
+      }
       if (!dogs.length) {
         alert("Agrega primero los datos de tu perrito para continuar con la reserva.");
         openDogs();
         return;
       }
       const times = currentWalker.availability.map(time => `<option value="${escapeHtml(time)}">${escapeHtml(time)}</option>`).join("");
-      const dogOptions = dogs.map((dog, index) => `<option value="${index}">${escapeHtml(dog.name)} · ${escapeHtml(dog.size)} · ${escapeHtml(dog.breed)}</option>`).join("");
+      const dogOptions = dogs.map(dog => `<option value="${escapeHtml(dog.id)}">${escapeHtml(dog.name)} · ${escapeHtml(dog.size)} · ${escapeHtml(dog.breed)}</option>`).join("");
       const dateValue = filters.date || $("#searchDate").value || localDate;
       $("#bookingContent").innerHTML = `
         <p class="hint">Reserva con <strong>${escapeHtml(currentWalker.name)}</strong>${currentWalker.area ? ` · ${escapeHtml(currentWalker.area)}` : ""}</p>
@@ -567,37 +712,69 @@
             <div class="form-field"><label for="bookingDog">Perrito</label><select id="bookingDog" required>${dogOptions}</select></div>
             <div class="form-field"><label for="bookingTime">Horario disponible</label><select id="bookingTime" required>${times}</select></div>
             <div class="form-field"><label for="bookingDate">Fecha</label><input id="bookingDate" type="date" min="${localDate}" value="${dateValue}" required></div>
-            <div class="form-field"><label for="bookingPhone">Teléfono de contacto</label><input id="bookingPhone" type="tel" placeholder="55 1234 5678" autocomplete="tel" required></div>
-            <div class="form-field full"><label for="bookingAddress">Dirección para recoger al perrito</label><input id="bookingAddress" placeholder="Calle, número, colonia y referencias" autocomplete="street-address" required></div>
+            <div class="form-field"><label for="bookingPhone">Teléfono de contacto</label><input id="bookingPhone" type="tel" maxlength="30" placeholder="55 1234 5678" autocomplete="tel" required></div>
+            <div class="form-field full"><label for="bookingAddress">Dirección para recoger al perrito</label><input id="bookingAddress" maxlength="250" placeholder="Calle, número, colonia y referencias" autocomplete="street-address" required></div>
           </div>
-          <div class="notice">El pago todavía no está habilitado. Al completar la configuración se mostrarán los precios y horarios definitivos.</div>
-          <div class="form-actions"><button type="button" class="button button-quiet" data-close="bookingDialog">Cancelar</button><button class="button button-primary" type="submit">Confirmar reserva</button></div>
+          <div class="notice">Precio del paseo: ${money(currentWalker.price)}. La solicitud queda pendiente de confirmación de Max. No se realizará ningún cobro.</div>
+          <p class="auth-message" id="bookingFeedback" role="status" aria-live="polite"></p>
+          <div class="form-actions"><button type="button" class="button button-quiet" data-close="bookingDialog">Cancelar</button><button class="button button-primary" id="bookingSubmit" type="submit">Enviar solicitud</button></div>
         </form>`;
       $("#bookingDialog").showModal();
       $("#bookingForm").addEventListener("submit", saveBooking);
       $("#bookingForm [data-close]").addEventListener("click", () => $("#bookingDialog").close());
     }
 
-    function saveBooking(event) {
+    async function saveBooking(event) {
       event.preventDefault();
       const form = event.currentTarget;
       if (!form.reportValidity()) return;
-      const dog = dogs[Number($("#bookingDog").value)];
-      const booking = {
-        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-        walker: currentWalker.name,
-        dog: dog.name,
-        date: $("#bookingDate").value,
-        time: $("#bookingTime").value,
-        address: $("#bookingAddress").value.trim(),
-        phone: $("#bookingPhone").value.trim(),
-        price: currentWalker.price,
-        status: "Pendiente de confirmación"
-      };
-      bookings = [booking, ...bookings];
-      store.write(userStorageKey("bookings"), bookings);
-      $("#bookingContent").innerHTML = `<div class="success"><div class="success-mark">✓</div><h3>¡Solicitud enviada!</h3><p>Tu paseo con <strong>${escapeHtml(booking.walker)}</strong> para <strong>${escapeHtml(booking.dog)}</strong> quedó guardado para el ${formatDate(booking.date)} a las ${escapeHtml(booking.time)}.<br><br>El cobro real se habilitará al integrar un proveedor de pagos.</p><div class="form-actions"><button class="button button-primary" id="doneBooking">Listo</button></div></div>`;
-      $("#doneBooking").addEventListener("click", () => $("#bookingDialog").close());
+      const dog = dogs.find(item => item.id === $("#bookingDog").value);
+      const walkDate = $("#bookingDate").value;
+      const walkTime = $("#bookingTime").value;
+      const feedback = $("#bookingFeedback");
+      if (!dog || !currentWalker.availabilityDays.includes(new Date(`${walkDate}T12:00:00`).getDay())) {
+        feedback.textContent = "Max no ofrece paseos ese día. Elige otra fecha disponible.";
+        feedback.style.color = "#a7372f";
+        return;
+      }
+      if (currentWalker.sizes.length && !currentWalker.sizes.includes(dog.size)) {
+        feedback.textContent = "Max no ofrece paseos para el tamaño de este perrito.";
+        feedback.style.color = "#a7372f";
+        return;
+      }
+      const submit = $("#bookingSubmit");
+      submit.disabled = true;
+      feedback.textContent = "Enviando solicitud…";
+      try {
+        const { error } = await authClient.from("walk_bookings").insert({
+          customer_id: currentUser.id,
+          walker_id: currentWalker.id,
+          dog_id: dog.id,
+          customer_name: currentProfile.full_name,
+          dog_name: dog.name,
+          dog_count: dog.count,
+          dog_breed: dog.breed,
+          dog_size: dog.size,
+          dog_behavior: dog.behavior,
+          dog_photo_path: dog.photo_path,
+          walk_date: walkDate,
+          walk_time: walkTime,
+          address: $("#bookingAddress").value.trim(),
+          phone: $("#bookingPhone").value.trim(),
+          price_mxn: currentWalker.price,
+          status: "pending"
+        });
+        if (error) throw error;
+        $("#bookingContent").innerHTML = `<div class="success"><div class="success-mark">✓</div><h3>¡Solicitud enviada!</h3><p>Max recibirá tu solicitud para <strong>${escapeHtml(dog.name)}</strong> el ${formatDate(walkDate)} a las ${escapeHtml(walkTime)}. La confirmación aparecerá en <strong>Mis paseos</strong>.<br><br>Precio acordado: <strong>${money(currentWalker.price)}</strong>. No se realizó ningún cobro.</p><div class="form-actions"><button class="button button-primary" id="doneBooking">Listo</button></div></div>`;
+        $("#doneBooking").addEventListener("click", () => $("#bookingDialog").close());
+      } catch (error) {
+        console.error("No se pudo guardar la solicitud de paseo.", error);
+        feedback.textContent = error.code === "23505"
+          ? "Ese horario ya se solicitó. Elige otro horario o fecha."
+          : "No se pudo enviar la solicitud. Confirma la conexión e inténtalo de nuevo.";
+        feedback.style.color = "#a7372f";
+        submit.disabled = false;
+      }
     }
 
     function openDogs() {
@@ -619,38 +796,54 @@
           <div class="form-field"><label for="dogBreed">Raza</label><input id="dogBreed" placeholder="Ej. mestizo, labrador" maxlength="50" required></div>
           <div class="form-field"><label for="dogSize">Tamaño</label><select id="dogSize" required><option value="">Selecciona</option><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></div>
           <div class="form-field full"><label for="dogBehavior">Comportamiento y cuidados</label><textarea id="dogBehavior" placeholder="¿Es sociable, tímido, reactivo? ¿Tiene alguna indicación especial?" maxlength="500" required></textarea></div>
-          <div class="form-field full"><label for="dogPhoto">Foto del perrito (opcional)</label><input id="dogPhoto" type="file" accept="image/*"><p class="hint">La foto se conserva en este navegador durante la demostración.</p></div>
-        </div><div class="form-actions"><button class="button button-primary" type="submit">Guardar perfil</button></div></form>`;
+          <div class="form-field full"><label for="dogPhoto">Foto del perrito (opcional)</label><input id="dogPhoto" type="file" accept="image/*"><p class="hint">La foto y los datos se guardan en tu cuenta y solo los verá Max si solicitas un paseo.</p></div>
+        </div><p class="auth-message" id="dogFeedback" role="status" aria-live="polite"></p><div class="form-actions"><button class="button button-primary" id="dogSubmit" type="submit">Guardar perfil</button></div></form>`;
       $("#dogForm").addEventListener("submit", saveDog);
     }
 
-    function saveDog(event) {
+    async function saveDog(event) {
       event.preventDefault();
       const form = event.currentTarget;
       if (!form.reportValidity()) return;
       const photo = $("#dogPhoto").files[0];
-      const save = photo ? resizePhoto(photo).then(dataUrl => addDog(dataUrl)) : Promise.resolve(addDog(""));
-      save.catch(error => {
-        console.error("No se pudo preparar la foto de la mascota.", error);
-        alert("No se pudo procesar la foto. Intenta con otra imagen.");
-      });
-    }
-
-    function addDog(photo) {
-      dogs.push({
-        name: $("#dogName").value.trim(),
-        count: Number($("#dogCount").value),
-        breed: $("#dogBreed").value.trim(),
-        size: $("#dogSize").value,
-        behavior: $("#dogBehavior").value.trim(),
-        photo
-      });
-      store.write(userStorageKey("dogs"), dogs);
-      renderDogs();
+      const feedback = $("#dogFeedback");
+      const submit = $("#dogSubmit");
+      submit.disabled = true;
+      feedback.textContent = "Guardando en tu cuenta…";
+      try {
+        const photoData = photo ? await resizePhoto(photo) : "";
+        const photoPath = photoData
+          ? await uploadPhoto(photoData, "pet-photos", `${currentUser.id}/${crypto.randomUUID()}.jpg`)
+          : null;
+        const { data, error } = await authClient.from("customer_dogs").insert({
+          customer_id: currentUser.id,
+          name: $("#dogName").value.trim(),
+          count: Number($("#dogCount").value),
+          breed: $("#dogBreed").value.trim(),
+          size: $("#dogSize").value,
+          behavior: $("#dogBehavior").value.trim(),
+          photo_path: photoPath
+        }).select("*").single();
+        if (error) {
+          if (photoPath) await authClient.storage.from("pet-photos").remove([photoPath]);
+          throw error;
+        }
+        dogs.push({ ...data, photo: await signedPetPhoto(data.photo_path) });
+        renderDogs();
+      } catch (error) {
+        console.error("No se pudo guardar el perfil de la mascota.", error);
+        feedback.textContent = "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.";
+        feedback.style.color = "#a7372f";
+        submit.disabled = false;
+      }
     }
 
     function resizePhoto(file) {
       return new Promise((resolve, reject) => {
+        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+          reject(new Error("Selecciona una imagen de hasta 10 MB."));
+          return;
+        }
         const reader = new FileReader();
         reader.onerror = () => reject(reader.error || new Error("No se pudo leer la imagen."));
         reader.onload = () => {
@@ -670,83 +863,194 @@
       });
     }
 
-    function renderBookings() {
+    async function renderBookings() {
       if (!currentProfile || currentProfile.role !== "customer") {
         openAuth("login");
         setAuthMessage("Inicia sesión con tu cuenta de cliente para ver tus paseos.");
         return;
       }
-      $("#bookingsContent").innerHTML = bookings.length ? bookings.map(booking => `<div class="booking-row"><strong>${escapeHtml(booking.dog)} con ${escapeHtml(booking.walker)}</strong><small>${formatDate(booking.date)} · ${escapeHtml(booking.time)} · ${money(booking.price)} · ${escapeHtml(booking.status)}</small><br><small>${escapeHtml(booking.address)}</small></div>`).join("") : `<p class="hint">Aquí aparecerán tus solicitudes de paseo.</p>`;
       $("#bookingsDialog").showModal();
+      $("#bookingsContent").innerHTML = `<p class="hint">Cargando tus solicitudes…</p>`;
+      try {
+        const { data, error } = await authClient.from("walk_bookings").select("*")
+          .eq("customer_id", currentUser.id).order("created_at", { ascending: false });
+        if (error) throw error;
+        const statusLabels = { pending: "Pendiente de confirmación", confirmed: "Confirmado", rejected: "No disponible", completed: "Completado", cancelled: "Cancelado" };
+        $("#bookingsContent").innerHTML = data.length ? data.map(booking => `
+          <div class="booking-row">
+            <strong>${escapeHtml(booking.dog_name)} con ${escapeHtml(maxProfile.name)}</strong>
+            <small>${formatDate(booking.walk_date)} · ${escapeHtml(booking.walk_time.slice(0, 5))} · ${money(booking.price_mxn)} · ${statusLabels[booking.status]}</small><br>
+            <small>${escapeHtml(booking.address)} · ${escapeHtml(booking.phone)}</small>
+          </div>`).join("") : `<p class="hint">Aquí aparecerán tus solicitudes de paseo.</p>`;
+      } catch (error) {
+        console.error("No se pudieron cargar las solicitudes de paseo.", error);
+        $("#bookingsContent").innerHTML = `<p class="hint">No se pudieron cargar tus solicitudes. Intenta de nuevo más tarde.</p>`;
+      }
     }
 
-    function renderWalkerMode() {
+    async function renderWalkerMode() {
       if (!currentProfile || !["walker", "admin"].includes(currentProfile.role)) {
         openAuth("login");
         setAuthMessage("Solo Max y la cuenta de desarrollo autorizada pueden abrir estos perfiles.");
         return;
       }
-      const profile = maxProfile;
+      const profile = walkers.find(walker => walker.id === currentUser.id) || maxProfile;
       const activities = ["Tiene perritos", "Practica bici", "Paseos a pie", "Sin correa"];
       const sizes = ["Pequeño", "Mediano", "Grande"];
+      const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
       $("#profilesContent").innerHTML = `
         <section>
           <h3 style="margin:0 0 8px;font-size:16px">Paseador: ${escapeHtml(profile.name)}</h3>
-          <p class="hint">Este es el único perfil que aparecerá en el listado. Los datos no configurados se mantienen ocultos.</p>
+          <p class="hint">El perfil y la foto se guardan en la nube y se muestran públicamente. No incluyas datos privados en la descripción.</p>
           <form id="maxProfileForm">
             <div class="form-grid">
               <div class="form-field full"><label for="maxArea">Zona o colonia</label><input id="maxArea" maxlength="80" value="${escapeHtml(profile.area)}" placeholder="Completa más adelante"></div>
               <div class="form-field full"><label for="maxBio">Descripción</label><textarea id="maxBio" maxlength="500" placeholder="Agrega una descripción cuando esté lista">${escapeHtml(profile.bio)}</textarea></div>
               <div class="form-field"><label for="maxPrice">Precio por paseo (opcional)</label><input id="maxPrice" type="number" min="1" step="1" value="${escapeHtml(profile.price)}" placeholder="Sin definir"></div>
               <div class="form-field"><label for="maxAvailability">Horarios (separados por coma)</label><input id="maxAvailability" value="${escapeHtml(profile.availability.join(", "))}" placeholder="Ej. 09:00, 13:00"></div>
-              <div class="form-field full"><label for="maxPhoto">Foto de perfil (opcional)</label><input id="maxPhoto" type="file" accept="image/*"></div>
+              <div class="form-field full"><label for="maxPhoto">Foto de perfil (opcional, máximo 10 MB)</label><input id="maxPhoto" type="file" accept="image/*"></div>
+              <div class="form-field full"><label>Días disponibles</label><div class="tags">${days.map((day, index) => `<label class="tag"><input name="maxDays" type="checkbox" value="${index}" ${profile.availabilityDays.includes(index) ? "checked" : ""}> ${day}</label>`).join("")}</div></div>
               <div class="form-field full"><label>Tamaños de perro que puede pasear</label><div class="tags">${sizes.map(size => `<label class="tag"><input name="maxSizes" type="checkbox" value="${size}" ${profile.sizes.includes(size) ? "checked" : ""}> ${size}</label>`).join("")}</div></div>
               <div class="form-field full"><label>Preferencias del paseador (opcional)</label><div class="tags">${activities.map(tag => `<label class="tag"><input name="maxTags" type="checkbox" value="${tag}" ${profile.tags.includes(tag) ? "checked" : ""}> ${tag}</label>`).join("")}</div></div>
               <div class="form-field full"><label class="toggle-row" style="border:0;padding:0"><span>Disponible para nuevas reservas</span><input id="maxAvailable" type="checkbox" ${profile.available ? "checked" : ""}></label></div>
             </div>
-            <div class="form-actions"><button class="button button-primary" type="submit">Guardar perfil de Max</button></div>
+            <p class="auth-message" id="profileFeedback" role="status" aria-live="polite"></p>
+            <div class="form-actions"><button class="button button-primary" id="profileSubmit" type="submit">Guardar perfil</button></div>
           </form>
+        </section>
+        <section style="margin-top:25px;padding-top:20px;border-top:1px solid var(--line)">
+          <h3 style="margin:0 0 8px;font-size:16px">Solicitudes de paseo</h3>
+          <p class="hint">Los datos de contacto y domicilio solo son visibles para el cliente y el paseador asignado.</p>
+          <div id="walkerBookings"><p class="hint">Cargando solicitudes…</p></div>
         </section>
         ${currentProfile.role === "admin" ? `<section style="margin-top:25px;padding-top:20px;border-top:1px solid var(--line)">
           <h3 style="margin:0 0 8px;font-size:16px">Cuenta privada de desarrollo</h3>
           <p class="hint">Esta cuenta solo tiene acceso de administración y no aparece como paseador público.</p>
           <p class="hint" style="margin-top:10px">${escapeHtml(currentProfile.full_name)} · ${escapeHtml(currentUser.email)}</p>
         </section>` : ""}
-        <p id="profileFeedback" class="auth-message" role="status" aria-live="polite"></p>`;
+        `;
       $("#profilesDialog").showModal();
       $("#maxProfileForm").addEventListener("submit", saveMaxProfile);
-    }
-
-    function saveMaxProfile(event) {
-      event.preventDefault();
-      const photo = $("#maxPhoto").files[0];
-      const save = photo ? resizePhoto(photo).then(dataUrl => applyMaxProfile(dataUrl)) : Promise.resolve(applyMaxProfile(maxProfile.photo));
-      save.catch(error => {
-        console.error("No se pudo preparar la foto del paseador.", error);
-        alert("No se pudo procesar la foto. Intenta con otra imagen.");
-      });
-    }
-
-    function applyMaxProfile(photo) {
-      const availability = $("#maxAvailability").value.split(",").map(time => time.trim()).filter(Boolean);
-      if (availability.some(time => !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
-        $("#profileFeedback").textContent = "Usa el formato de 24 horas para cada horario (por ejemplo, 09:00).";
-        return;
+      try {
+        let query = authClient.from("walk_bookings").select("*").order("walk_date", { ascending: true });
+        if (currentProfile.role === "walker") query = query.eq("walker_id", currentUser.id);
+        const { data, error } = await query;
+        if (error) throw error;
+        const statusLabels = { pending: "Pendiente", confirmed: "Confirmado", rejected: "No disponible", completed: "Completado", cancelled: "Cancelado" };
+        const cards = await Promise.all(data.map(async booking => {
+          const petPhoto = booking.dog_photo_path ? await signedPetPhoto(booking.dog_photo_path) : "";
+          const actions = booking.status === "pending" ? `
+            <div class="form-actions">
+              <button class="button button-primary button-small" data-booking-status="confirmed" data-booking-id="${booking.id}">Confirmar</button>
+              <button class="button button-soft button-small" data-booking-status="rejected" data-booking-id="${booking.id}">Rechazar</button>
+            </div>` : "";
+          return `<article class="booking-row">
+            ${petPhoto ? `<img src="${escapeHtml(petPhoto)}" alt="Foto de ${escapeHtml(booking.dog_name)}" style="width:64px;height:64px;object-fit:cover;border-radius:12px;float:right">` : ""}
+            <strong>${escapeHtml(booking.dog_name)} · ${escapeHtml(booking.customer_name)}</strong>
+            <small>${formatDate(booking.walk_date)} · ${escapeHtml(booking.walk_time.slice(0, 5))} · ${money(booking.price_mxn)} · ${statusLabels[booking.status]}</small><br>
+            <small>${booking.dog_count} ${booking.dog_count === 1 ? "perrito" : "perritos"} · ${escapeHtml(booking.dog_breed)} · ${escapeHtml(booking.dog_size)} · ${escapeHtml(booking.dog_behavior)}</small><br>
+            <small>${escapeHtml(booking.address)} · ${escapeHtml(booking.phone)}</small>${actions}
+          </article>`;
+        }));
+        $("#walkerBookings").innerHTML = cards.length ? cards.join("") : `<p class="hint">Todavía no hay solicitudes.</p>`;
+        $("#walkerBookings").querySelectorAll("[data-booking-status]").forEach(button => {
+          button.addEventListener("click", () => respondToBooking(button.dataset.bookingId, button.dataset.bookingStatus));
+        });
+      } catch (error) {
+        console.error("No se pudieron cargar las solicitudes asignadas.", error);
+        $("#walkerBookings").innerHTML = `<p class="hint">No se pudieron cargar las solicitudes. Intenta de nuevo más tarde.</p>`;
       }
-      const priceValue = $("#maxPrice").value;
-      Object.assign(maxProfile, {
-        area: $("#maxArea").value.trim(),
-        bio: $("#maxBio").value.trim(),
-        price: priceValue ? Number(priceValue) : "",
-        photo,
-        availability,
-        available: $("#maxAvailable").checked,
-        sizes: [...$("#maxProfileForm").querySelectorAll('input[name="maxSizes"]:checked')].map(input => input.value),
-        tags: [...$("#maxProfileForm").querySelectorAll('input[name="maxTags"]:checked')].map(input => input.value)
-      });
-      store.write("pasea-max-profile", maxProfile);
-      renderWalkers();
-      $("#profileFeedback").textContent = "Perfil de Max guardado en este navegador. Para habilitar reservas también se requiere precio, horario y disponibilidad.";
+    }
+
+    async function saveMaxProfile(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const photo = $("#maxPhoto").files[0];
+      const feedback = $("#profileFeedback");
+      const submit = $("#profileSubmit");
+      const oldPhotoPath = profileForEdit().photoPath;
+      submit.disabled = true;
+      feedback.textContent = "Guardando perfil en la nube…";
+      try {
+        const availability = $("#maxAvailability").value.split(",").map(time => time.trim()).filter(Boolean);
+        if (availability.some(time => !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
+          feedback.textContent = "Usa el formato de 24 horas para cada horario (por ejemplo, 09:00).";
+          feedback.style.color = "#a7372f";
+          return;
+        }
+        const availabilityDays = [...form.querySelectorAll('input[name="maxDays"]:checked')].map(input => Number(input.value));
+        const available = $("#maxAvailable").checked;
+        const priceValue = $("#maxPrice").value;
+        if (available && (!priceValue || !availability.length || !availabilityDays.length)) {
+          feedback.textContent = "Para aparecer disponible, define precio, al menos un horario y un día.";
+          feedback.style.color = "#a7372f";
+          return;
+        }
+        const photoData = photo ? await resizePhoto(photo) : "";
+        const photoPath = photoData
+          ? await uploadPhoto(photoData, "walker-photos", `${profileIdForEdit()}/${crypto.randomUUID()}.jpg`)
+          : profileForEdit().photoPath || null;
+        const row = {
+          user_id: profileIdForEdit(),
+          display_name: profileForEdit().name,
+          area: $("#maxArea").value.trim(),
+          bio: $("#maxBio").value.trim(),
+          price_mxn: priceValue ? Number(priceValue) : null,
+          photo_path: photoPath,
+          availability,
+          availability_days: availabilityDays,
+          is_available: available,
+          sizes: [...form.querySelectorAll('input[name="maxSizes"]:checked')].map(input => input.value),
+          preferences: [...form.querySelectorAll('input[name="maxTags"]:checked')].map(input => input.value),
+          updated_at: new Date().toISOString()
+        };
+        const { data, error } = await authClient.from("walker_profiles").upsert(row, { onConflict: "user_id" }).select("*").single();
+        if (error) {
+          if (photoData && photoPath) await authClient.storage.from("walker-photos").remove([photoPath]);
+          throw error;
+        }
+        const savedProfile = mapWalkerProfile(data);
+        const index = walkers.findIndex(walker => walker.id === savedProfile.id);
+        if (index === -1) walkers.push(savedProfile);
+        else walkers[index] = savedProfile;
+        maxProfile = walkers[0] || savedProfile;
+        renderWalkers();
+        if (photoData && oldPhotoPath && oldPhotoPath !== photoPath) {
+          const { error: removeError } = await authClient.storage.from("walker-photos").remove([oldPhotoPath]);
+          if (removeError) console.error("No se pudo borrar la foto de perfil anterior.", removeError);
+        }
+        feedback.textContent = available ? "Perfil guardado. Ya aparece disponible para solicitudes." : "Perfil guardado. La disponibilidad quedó pausada.";
+        feedback.style.color = "";
+      } catch (error) {
+        console.error("No se pudo guardar el perfil del paseador.", error);
+        feedback.textContent = "No se pudo guardar el perfil. Revisa la conexión e inténtalo de nuevo.";
+        feedback.style.color = "#a7372f";
+      } finally {
+        submit.disabled = false;
+      }
+    }
+
+    function profileForEdit() {
+      return walkers.find(walker => walker.id === currentUser.id) || maxProfile;
+    }
+
+    function profileIdForEdit() {
+      return profileForEdit().id;
+    }
+
+    async function respondToBooking(bookingId, status) {
+      try {
+        const { error } = await authClient.from("walk_bookings").update({ status })
+          .eq("id", bookingId).eq("status", "pending");
+        if (error) throw error;
+        await renderWalkerMode();
+      } catch (error) {
+        console.error("No se pudo actualizar la solicitud.", error);
+        alert(error.code === "23505"
+          ? "Ese horario ya está ocupado por otra solicitud confirmada."
+          : "No se pudo actualizar la solicitud. Actualiza la página e inténtalo de nuevo.");
+      }
     }
 
     function escapeHtml(value) {

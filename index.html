@@ -177,7 +177,7 @@
           Pasea
         </a>
         <h1>Inicia sesión para continuar</h1>
-        <p>Clientes, Max y Martín entran con su correo. Los permisos de cada cuenta dependen de su rol autorizado.</p>
+        <p>Inicia sesión con tu correo para acceder a tu cuenta.</p>
         <div class="auth-gate-actions">
           <button class="button button-primary" id="gateLoginButton" type="button">Iniciar sesión</button>
           <button class="button button-soft" id="gateSignupButton" type="button">Crear cuenta de cliente</button>
@@ -211,7 +211,7 @@
         <div class="hero-copy">
           <div class="eyebrow">Más movimiento, más colitas felices</div>
           <h1 id="hero-title">Su próximo paseo empieza con alguien de confianza.</h1>
-          <p>Revisa la disponibilidad de Max, solicita un paseo y recibe su confirmación en tu cuenta.</p>
+          <p>Revisa la disponibilidad del paseador, solicita un paseo y recibe su confirmación en tu cuenta.</p>
         </div>
         <img class="hero-dog" src="https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&amp;fit=crop&amp;w=650&amp;q=85" alt="Golden retriever listo para salir a pasear">
       </div>
@@ -234,14 +234,14 @@
 
     <section aria-labelledby="walkers-title">
       <div class="section-head">
-        <div><h2 id="walkers-title">Paseadores</h2><p id="resultsLabel">Conoce el perfil de Maximiliano.</p></div>
+        <div><h2 id="walkers-title">Paseadores</h2><p id="resultsLabel">Conoce el perfil de nuestro paseador.</p></div>
         <button class="button button-quiet button-small" id="clearFiltersButton" hidden>Limpiar filtros</button>
       </div>
       <div class="listings" id="walkerList" aria-live="polite"></div>
     </section>
 
     <section class="trust-row" aria-label="Beneficios">
-      <div class="trust-item"><div class="trust-icon" aria-hidden="true">✓</div><div><strong>Solicitud con confirmación</strong><small>Elige fecha y horario; Max confirma o rechaza la solicitud.</small></div></div>
+      <div class="trust-item"><div class="trust-icon" aria-hidden="true">✓</div><div><strong>Solicitud con confirmación</strong><small>Elige fecha y horario; el paseador confirma o rechaza la solicitud.</small></div></div>
       <div class="trust-item"><div class="trust-icon" aria-hidden="true">☆</div><div><strong>Calificaciones más adelante</strong><small>Las reseñas se agregarán después de los paseos.</small></div></div>
       <div class="trust-item"><div class="trust-icon" aria-hidden="true">♡</div><div><strong>Un paseo a su estilo</strong><small>Cuéntanos qué hace feliz a tu perrito.</small></div></div>
     </section>
@@ -596,7 +596,6 @@
       $("#passwordRecoveryForm").hidden = false;
       $("#loginTab").hidden = true;
       $("#signupTab").hidden = true;
-      $("#staffLoginHint").hidden = true;
       $("#loginHelpActions").hidden = true;
       $("#authCloseButton").hidden = true;
       $("#authMessage").textContent = "Escribe y confirma tu nueva contraseña para terminar.";
@@ -625,7 +624,6 @@
       $("#loginHelpActions").hidden = signup || Boolean(currentProfile);
       $("#loginTab").hidden = Boolean(currentProfile);
       $("#signupTab").hidden = Boolean(currentProfile);
-      $("#staffLoginHint").hidden = signup || Boolean(currentProfile);
       $("#signOutButton").hidden = !currentProfile;
       setAuthMessage(currentProfile
         ? `${currentProfile.full_name} · ${currentProfile.role === "admin" ? "Administrador" : currentProfile.role === "walker" ? "Paseador" : "Cliente"}`
@@ -875,7 +873,7 @@
             <div class="form-field"><label for="bookingPhone">Teléfono de contacto</label><input id="bookingPhone" type="tel" maxlength="30" placeholder="55 1234 5678" autocomplete="tel" required></div>
             <div class="form-field full"><label for="bookingAddress">Dirección para recoger al perrito</label><input id="bookingAddress" maxlength="250" placeholder="Calle, número, colonia y referencias" autocomplete="street-address" required></div>
           </div>
-          <div class="notice">Precio del paseo: ${money(currentWalker.price)}. La solicitud queda pendiente de confirmación de Max. No se realizará ningún cobro.</div>
+          <div class="notice">Precio del paseo: ${money(currentWalker.price)}. La solicitud queda pendiente de confirmación del paseador. No se realizará ningún cobro.</div>
           <p class="auth-message" id="bookingFeedback" role="status" aria-live="polite"></p>
           <div class="form-actions"><button type="button" class="button button-quiet" data-close="bookingDialog">Cancelar</button><button class="button button-primary" id="bookingSubmit" type="submit">Enviar solicitud</button></div>
         </form>`;
@@ -893,12 +891,12 @@
       const walkTime = $("#bookingTime").value;
       const feedback = $("#bookingFeedback");
       if (!dog || !currentWalker.availabilityDays.includes(new Date(`${walkDate}T12:00:00`).getDay())) {
-        feedback.textContent = "Max no ofrece paseos ese día. Elige otra fecha disponible.";
+        feedback.textContent = "El paseador no ofrece paseos ese día. Elige otra fecha disponible.";
         feedback.style.color = "#a7372f";
         return;
       }
       if (currentWalker.sizes.length && !currentWalker.sizes.includes(dog.size)) {
-        feedback.textContent = "Max no ofrece paseos para el tamaño de este perrito.";
+        feedback.textContent = "El paseador no ofrece paseos para el tamaño de este perrito.";
         feedback.style.color = "#a7372f";
         return;
       }
@@ -925,7 +923,7 @@
           status: "pending"
         });
         if (error) throw error;
-        $("#bookingContent").innerHTML = `<div class="success"><div class="success-mark">✓</div><h3>¡Solicitud enviada!</h3><p>Max recibirá tu solicitud para <strong>${escapeHtml(dog.name)}</strong> el ${formatDate(walkDate)} a las ${escapeHtml(walkTime)}. La confirmación aparecerá en <strong>Mis paseos</strong>.<br><br>Precio acordado: <strong>${money(currentWalker.price)}</strong>. No se realizó ningún cobro.</p><div class="form-actions"><button class="button button-primary" id="doneBooking">Listo</button></div></div>`;
+        $("#bookingContent").innerHTML = `<div class="success"><div class="success-mark">✓</div><h3>¡Solicitud enviada!</h3><p>El paseador recibirá tu solicitud para <strong>${escapeHtml(dog.name)}</strong> el ${formatDate(walkDate)} a las ${escapeHtml(walkTime)}. La confirmación aparecerá en <strong>Mis paseos</strong>.<br><br>Precio acordado: <strong>${money(currentWalker.price)}</strong>. No se realizó ningún cobro.</p><div class="form-actions"><button class="button button-primary" id="doneBooking">Listo</button></div></div>`;
         $("#doneBooking").addEventListener("click", () => $("#bookingDialog").close());
       } catch (error) {
         console.error("No se pudo guardar la solicitud de paseo.", error);
@@ -956,7 +954,7 @@
           <div class="form-field"><label for="dogBreed">Raza</label><input id="dogBreed" placeholder="Ej. mestizo, labrador" maxlength="50" required></div>
           <div class="form-field"><label for="dogSize">Tamaño</label><select id="dogSize" required><option value="">Selecciona</option><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></div>
           <div class="form-field full"><label for="dogBehavior">Comportamiento y cuidados</label><textarea id="dogBehavior" placeholder="¿Es sociable, tímido, reactivo? ¿Tiene alguna indicación especial?" maxlength="500" required></textarea></div>
-          <div class="form-field full"><label for="dogPhoto">Foto del perrito (opcional)</label><input id="dogPhoto" type="file" accept="image/*"><p class="hint">La foto y los datos se guardan en tu cuenta y solo los verá Max si solicitas un paseo.</p></div>
+          <div class="form-field full"><label for="dogPhoto">Foto del perrito (opcional)</label><input id="dogPhoto" type="file" accept="image/*"><p class="hint">La foto y los datos se guardan en tu cuenta y solo los verá el paseador si solicitas un paseo.</p></div>
         </div><p class="auth-message" id="dogFeedback" role="status" aria-live="polite"></p><div class="form-actions"><button class="button button-primary" id="dogSubmit" type="submit">Guardar perfil</button></div></form>`;
       $("#dogForm").addEventListener("submit", saveDog);
     }
@@ -1051,7 +1049,7 @@
     async function renderWalkerMode() {
       if (!currentProfile || !["walker", "admin"].includes(currentProfile.role)) {
         openAuth("login");
-        setAuthMessage("Solo Max y la cuenta de desarrollo autorizada pueden abrir estos perfiles.");
+        setAuthMessage("No tienes permiso para abrir estos perfiles.");
         return;
       }
       const profile = walkers.find(walker => walker.id === currentUser.id) || maxProfile;

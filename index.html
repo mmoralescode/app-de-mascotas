@@ -89,6 +89,12 @@
     .trust-item small { color: var(--muted); font-size: 12px; }
     footer { padding: 23px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
     .footer-inner { display: flex; justify-content: space-between; gap: 15px; }
+    .auth-gate { min-height: 100vh; display: grid; place-items: center; padding: 24px 0; }
+    .auth-gate-card { width: min(520px, 100%); padding: 32px; border: 1px solid var(--line); border-radius: 22px; background: var(--paper); box-shadow: var(--shadow); text-align: center; }
+    .auth-gate-card .brand { margin-bottom: 20px; }
+    .auth-gate-card h1 { margin: 0 auto 10px; font-size: clamp(27px, 5vw, 36px); letter-spacing: -1px; }
+    .auth-gate-card p { color: var(--muted); line-height: 1.6; }
+    .auth-gate-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
 
     dialog { width: min(560px, calc(100% - 28px)); max-height: min(88vh, 850px); padding: 0; border: 0; border-radius: 20px; color: var(--ink); box-shadow: 0 25px 90px #152b1d44; }
     dialog::backdrop { background: #15241dcc; backdrop-filter: blur(3px); }
@@ -158,10 +164,30 @@
       .form-grid { grid-template-columns: 1fr; gap: 12px; }
       .form-field.full { grid-column: auto; }
       .dialog-content { padding: 17px; }
+      .auth-gate-card { padding: 25px 19px; }
     }
   </style>
 </head>
 <body>
+  <main class="auth-gate" id="loginGate">
+    <section class="wrap">
+      <div class="auth-gate-card">
+        <a class="brand" href="#" aria-label="Pasea">
+          <span class="brand-mark" aria-hidden="true">P</span>
+          Pasea
+        </a>
+        <h1>Inicia sesión para continuar</h1>
+        <p>Clientes, Max y Martín entran con su correo. Los permisos de cada cuenta dependen de su rol autorizado.</p>
+        <div class="auth-gate-actions">
+          <button class="button button-primary" id="gateLoginButton" type="button">Iniciar sesión</button>
+          <button class="button button-soft" id="gateSignupButton" type="button">Crear cuenta de cliente</button>
+        </div>
+        <p id="gateStatus" class="auth-message" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="appShell" hidden>
   <header class="topbar">
     <div class="wrap topbar-inner">
       <a class="brand" href="#" aria-label="Pasea, inicio">
@@ -222,6 +248,7 @@
   </main>
 
   <footer><div class="wrap footer-inner"><span>© <span id="year"></span> Pasea. Hecho para quienes mueven la cola.</span><span>Solicitudes en línea · Los cobros aún no están habilitados.</span></div></footer>
+  </div>
 
   <dialog id="bookingDialog" aria-labelledby="bookingTitle">
     <div class="dialog-head"><h2 id="bookingTitle">Agenda un paseo</h2><button class="icon-button" data-close="bookingDialog" aria-label="Cerrar">×</button></div>
@@ -244,7 +271,7 @@
   </dialog>
 
   <dialog id="authDialog" aria-labelledby="authTitle">
-    <div class="dialog-head"><h2 id="authTitle">Tu cuenta Pasea</h2><button class="icon-button" data-close="authDialog" aria-label="Cerrar">×</button></div>
+    <div class="dialog-head"><h2 id="authTitle">Tu cuenta Pasea</h2><button class="icon-button" id="authCloseButton" data-close="authDialog" aria-label="Cerrar" hidden>×</button></div>
     <div class="dialog-content" id="authContent">
       <div id="authConfigNotice" class="notice" hidden></div>
       <div class="auth-tabs" role="tablist" aria-label="Acceso a Pasea">
@@ -389,15 +416,18 @@
       dogs = await Promise.all(dogRows.map(async dog => ({ ...dog, photo: await signedPetPhoto(dog.photo_path) })));
     }
 
-    function mapWalkerProfile(row) {
-      const { data } = authClient.storage.from("walker-photos").getPublicUrl(row.photo_path || "");
+    async function mapWalkerProfile(row) {
+      const { data, error } = row.photo_path
+        ? await authClient.storage.from("walker-photos").createSignedUrl(row.photo_path, 3600)
+        : { data: null, error: null };
+      if (error) throw error;
       return {
         id: row.user_id,
         name: row.display_name,
         area: row.area,
         bio: row.bio,
         price: row.price_mxn ?? "",
-        photo: row.photo_path ? data.publicUrl : "",
+        photo: data?.signedUrl || "",
         photoPath: row.photo_path,
         sizes: row.sizes || [],
         tags: row.preferences || [],
@@ -411,7 +441,7 @@
       const { data, error } = await authClient.from("walker_profiles")
         .select("*").order("display_name", { ascending: true });
       if (error) throw error;
-      const profiles = data.map(mapWalkerProfile);
+      const profiles = await Promise.all(data.map(mapWalkerProfile));
       walkers.splice(0, walkers.length, ...profiles);
       maxProfile = profiles[0] || { ...defaultMaxProfile };
       renderWalkers();
@@ -460,7 +490,7 @@
         if (photoPath) await authClient.storage.from("walker-photos").remove([photoPath]);
         throw error;
       }
-      const migrated = mapWalkerProfile(data);
+      const migrated = await mapWalkerProfile(data);
       const index = walkers.findIndex(walker => walker.id === migrated.id);
       if (index === -1) walkers.push(migrated);
       else walkers[index] = migrated;
@@ -470,9 +500,10 @@
     }
 
     function setAuthMessage(message, isError = false) {
-      const element = $("#authMessage");
-      element.textContent = message;
-      element.style.color = isError ? "#a7372f" : "";
+      for (const element of [$("#authMessage"), $("#gateStatus")]) {
+        element.textContent = message;
+        element.style.color = isError ? "#a7372f" : "";
+      }
     }
 
     function renderAccountButton() {
@@ -494,14 +525,24 @@
           currentProfile = data;
         }
       }
+      if (currentProfile) {
+        try {
+          await loadWalkerProfiles();
+          if (["walker", "admin"].includes(currentProfile.role)) await migrateLegacyWalkerProfile();
+        } catch (error) {
+          console.error("No se pudieron cargar los datos autorizados de la cuenta.", error);
+          currentProfile = null;
+          setAuthMessage("No se pudo validar el acceso de esta cuenta. Revisa la conexión e inténtalo de nuevo.", true);
+        }
+      }
+      $("#appShell").hidden = !currentProfile;
+      $("#loginGate").hidden = Boolean(currentProfile);
+      $("#authCloseButton").hidden = !currentProfile || recoveryMode;
       renderAccountButton();
       $("#myDogsButton").hidden = !currentProfile || currentProfile.role !== "customer";
       $("#myBookingsButton").hidden = !currentProfile || currentProfile.role !== "customer";
       $("#walkerModeButton").hidden = !currentProfile || !["walker", "admin"].includes(currentProfile.role);
       try {
-        if (currentProfile && ["walker", "admin"].includes(currentProfile.role)) {
-          await migrateLegacyWalkerProfile();
-        }
         await loadUserData();
       } catch (error) {
         console.error("No se pudieron cargar los datos de la cuenta.", error);
@@ -514,6 +555,9 @@
         $("#authConfigNotice").hidden = false;
         $("#authConfigNotice").textContent = "El acceso seguro todavía no está conectado. Primero configura el proyecto de Supabase y las llaves públicas en supabase-config.js.";
         $("#authSubmit").disabled = true;
+        $("#gateStatus").textContent = "No se pudo conectar al servicio de inicio de sesión.";
+        $("#gateLoginButton").disabled = true;
+        $("#gateSignupButton").disabled = true;
         return;
       }
       try {
@@ -530,7 +574,6 @@
             });
           }, 0);
         });
-        await loadWalkerProfiles();
         const { data, error } = await authClient.auth.getSession();
         if (error) throw error;
         await setCurrentUser(data.session?.user || null);
@@ -544,21 +587,26 @@
         $("#authConfigNotice").hidden = false;
         $("#authConfigNotice").textContent = "No se pudo conectar con Supabase. Revisa la URL y la clave pública configuradas.";
         $("#authSubmit").disabled = true;
+        $("#gateStatus").textContent = "No se pudo validar la sesión. Actualiza la página o inténtalo más tarde.";
       }
     }
 
     function showPasswordRecoveryForm() {
+      recoveryMode = true;
       $("#authTitle").textContent = "Crea tu contraseña";
       $("#authForm").hidden = true;
       $("#passwordRecoveryForm").hidden = false;
       $("#loginTab").hidden = true;
       $("#signupTab").hidden = true;
       $("#staffLoginHint").hidden = true;
+      $("#loginHelpActions").hidden = true;
+      $("#authCloseButton").hidden = true;
       $("#authMessage").textContent = "Escribe y confirma tu nueva contraseña para terminar.";
       $("#authDialog").showModal();
     }
 
     let authMode = "login";
+    let recoveryMode = false;
 
     function setAuthMode(mode) {
       authMode = mode;
@@ -702,7 +750,9 @@
         form.reset();
         $("#passwordRecoveryForm").hidden = true;
         $("#authForm").hidden = false;
+        recoveryMode = false;
         setAuthMode("login");
+        $("#authCloseButton").hidden = !currentProfile;
         setAuthMessage("Contraseña creada correctamente. Ya puedes iniciar sesión con tu correo y contraseña.");
       } catch (error) {
         console.error("No se pudo guardar la nueva contraseña.", error);
@@ -1190,6 +1240,8 @@
     $("#myBookingsButton").addEventListener("click", renderBookings);
     $("#walkerModeButton").addEventListener("click", renderWalkerMode);
     $("#accountButton").addEventListener("click", () => openAuth());
+    $("#gateLoginButton").addEventListener("click", () => openAuth("login"));
+    $("#gateSignupButton").addEventListener("click", () => openAuth("signup"));
     $("#loginTab").addEventListener("click", () => setAuthMode("login"));
     $("#signupTab").addEventListener("click", () => setAuthMode("signup"));
     $("#authForm").addEventListener("submit", handleAuthSubmit);
@@ -1209,11 +1261,18 @@
     });
     document.addEventListener("click", event => {
       const closeButton = event.target.closest("[data-close]");
-      if (closeButton) document.getElementById(closeButton.dataset.close).close();
+      if (closeButton) {
+        if (closeButton.dataset.close !== "authDialog" || currentProfile) {
+          document.getElementById(closeButton.dataset.close).close();
+        }
+      }
     });
     document.querySelectorAll("dialog").forEach(dialog => dialog.addEventListener("click", event => {
-      if (event.target === dialog) dialog.close();
+      if (event.target === dialog && (dialog.id !== "authDialog" || currentProfile)) dialog.close();
     }));
+    $("#authDialog").addEventListener("cancel", event => {
+      if (!currentProfile) event.preventDefault();
+    });
 
     renderWalkers();
     initializeAuth().catch(error => {

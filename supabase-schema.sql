@@ -9,7 +9,7 @@ create table if not exists public.profiles (
 alter table public.profiles enable row level security;
 
 revoke all on public.profiles from anon, authenticated;
-grant select on public.profiles to anon, authenticated;
+grant select on public.profiles to authenticated;
 grant update (full_name) on public.profiles to authenticated;
 
 drop policy if exists "Owners can read their profile" on public.profiles;
@@ -19,9 +19,9 @@ create policy "Owners can read their profile"
   using (auth.uid() = id);
 
 drop policy if exists "Public can read walker profiles" on public.profiles;
-create policy "Public can read walker profiles"
+create policy "Authenticated users can read walker profiles"
   on public.profiles for select
-  to anon, authenticated
+  to authenticated
   using (role = 'walker');
 
 drop policy if exists "Owners can update their name" on public.profiles;

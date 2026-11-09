@@ -15,17 +15,20 @@ create table if not exists public.walker_profiles (
 
 alter table public.walker_profiles enable row level security;
 revoke all on public.walker_profiles from anon, authenticated;
-grant select on public.walker_profiles to anon, authenticated;
+grant select on public.walker_profiles to authenticated;
 grant insert (user_id, display_name, area, bio, price_mxn, photo_path, sizes, preferences, availability, availability_days, is_available, updated_at)
   on public.walker_profiles to authenticated;
 grant update (display_name, area, bio, price_mxn, photo_path, sizes, preferences, availability, availability_days, is_available, updated_at)
   on public.walker_profiles to authenticated;
 
 drop policy if exists "Anyone can view walker listings" on public.walker_profiles;
-create policy "Anyone can view walker listings"
+create policy "Authenticated users can view walker listings"
   on public.walker_profiles for select
-  to anon, authenticated
+  to authenticated
   using (true);
+
+revoke select on public.profiles from anon;
+drop policy if exists "Public can read walker profiles" on public.profiles;
 
 drop policy if exists "Walkers and admins can create walker listings" on public.walker_profiles;
 create policy "Walkers and admins can create walker listings"
@@ -238,7 +241,7 @@ create index if not exists walk_bookings_walker_date
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
-  ('walker-photos', 'walker-photos', true, 2097152, array['image/jpeg']),
+  ('walker-photos', 'walker-photos', false, 2097152, array['image/jpeg']),
   ('pet-photos', 'pet-photos', false, 2097152, array['image/jpeg'])
 on conflict (id) do update set
   public = excluded.public,
@@ -246,9 +249,9 @@ on conflict (id) do update set
   allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Public can view walker photos" on storage.objects;
-create policy "Public can view walker photos"
+create policy "Authenticated users can view walker photos"
   on storage.objects for select
-  to anon, authenticated
+  to authenticated
   using (bucket_id = 'walker-photos');
 
 drop policy if exists "Walkers and admins manage their profile photos" on storage.objects;

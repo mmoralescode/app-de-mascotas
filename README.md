@@ -19,7 +19,7 @@ No se muestran reseñas, calificaciones ni verificaciones inventadas. Los datos 
 Supabase Auth ya está conectado en `supabase-config.js` y `supabase-schema.sql` ya se ejecutó en el proyecto. Para habilitar perfiles compartidos, fotos y solicitudes:
 
 1. Abre el SQL Editor del proyecto Supabase.
-2. Copia y ejecuta el contenido de `supabase-marketplace.sql`. Esto crea las tablas de perfiles, perros y solicitudes, las políticas RLS y los buckets de fotos (público para perfiles de paseadores y privado para mascotas).
+2. Copia y ejecuta el contenido de `supabase-marketplace.sql`. Esto crea las tablas de perfiles, perros y solicitudes, las políticas RLS y los buckets privados de fotos. Al volver a ejecutarlo también elimina la lectura anónima anterior de perfiles y fotos de paseadores.
 3. Max y Martín deben aceptar las invitaciones que recibieron y crear sus contraseñas. Los roles actuales son `walker` para Max y `admin` para Martín.
 
 Las fotos se redimensionan antes de subirlas y cada archivo se limita a 2 MB en el bucket. El perfil de paseador solo se muestra como disponible cuando Max publica precio, al menos un día y un horario. Al solicitar un paseo, el cliente elige una fecha/horario, registra el domicilio y teléfono de recogida, y recibe una solicitud pendiente; Max la confirma o rechaza desde **Perfiles → Solicitudes de paseo**. El precio se informa, pero no se cobra desde la app.
@@ -28,7 +28,7 @@ La app usa el plan gratuito de Supabase, sujeto a sus cuotas y condiciones vigen
 
 Max puede entrar con **Enviarme enlace de acceso**, o usar **Crear o recuperar contraseña** para recibir un enlace seguro y definir su contraseña. La disponibilidad del correo depende de los límites configurados en Supabase Auth.
 
-Las políticas de seguridad a nivel de fila (RLS) restringen la lectura y modificación de datos. La llave `anon`/publicable está diseñada para exponerse en el navegador; **nunca** pongas en `supabase-config.js` una llave `service_role`/secreta.
+La app exige una sesión y un perfil con rol válido antes de mostrar su contenido. RLS restringe la lectura y modificación de datos; las fotos de paseadores ahora se sirven con URL firmada después del inicio de sesión. Ejecuta `supabase-marketplace.sql` en Supabase para aplicar los permisos que bloquean accesos anónimos existentes. La llave `anon`/publicable está diseñada para exponerse en el navegador; **nunca** pongas en `supabase-config.js` una llave `service_role`/secreta.
 
 La primera vez que Max o Martín inicie sesión en este navegador, la app intenta importar el perfil anterior guardado localmente, si lo había. Los datos viejos de perros también se importan al iniciar sesión en la cuenta de cliente correspondiente. La importación no borra el respaldo local.
 

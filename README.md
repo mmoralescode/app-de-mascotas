@@ -7,6 +7,7 @@ Aplicación web responsive en español para buscar paseadores, registrar perrito
 - Listado con un solo paseador: Maximiliano Morales Alcántara.
 - Perfil editable de Max con zona, descripción, foto, precio, días y horarios, tamaños de perro y preferencias; se sincroniza con Supabase.
 - Registro e inicio de sesión de clientes mediante Supabase Auth.
+- Acceso por enlace de correo sin contraseña y flujo de creación/recuperación de contraseña.
 - Registro en la nube de perros y fotos privadas para cada cuenta.
 - Solicitudes de paseo con fecha, horario publicado, perro, domicilio, teléfono y precio; Max puede confirmar o rechazar.
 - Vistas separadas de solicitudes para el cliente y el paseador, con controles de acceso en Supabase.
@@ -24,6 +25,8 @@ Supabase Auth ya está conectado en `supabase-config.js` y `supabase-schema.sql`
 Las fotos se redimensionan antes de subirlas y cada archivo se limita a 2 MB en el bucket. El perfil de paseador solo se muestra como disponible cuando Max publica precio, al menos un día y un horario. Al solicitar un paseo, el cliente elige una fecha/horario, registra el domicilio y teléfono de recogida, y recibe una solicitud pendiente; Max la confirma o rechaza desde **Perfiles → Solicitudes de paseo**. El precio se informa, pero no se cobra desde la app.
 
 La app usa el plan gratuito de Supabase, sujeto a sus cuotas y condiciones vigentes; no integra servicios de pago externos. Las cuotas gratuitas tienen límites y pueden cambiar. Si se exceden, Supabase puede requerir una pausa o un cambio de plan para seguir utilizando el proyecto.
+
+Max puede entrar con **Enviarme enlace de acceso**, o usar **Crear o recuperar contraseña** para recibir un enlace seguro y definir su contraseña. La disponibilidad del correo depende de los límites configurados en Supabase Auth.
 
 Las políticas de seguridad a nivel de fila (RLS) restringen la lectura y modificación de datos. La llave `anon`/publicable está diseñada para exponerse en el navegador; **nunca** pongas en `supabase-config.js` una llave `service_role`/secreta.
 
